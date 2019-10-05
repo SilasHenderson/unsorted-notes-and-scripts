@@ -1,0 +1,139 @@
+<script>
+
+let layout = new Layout();
+
+let shiftDown  =  0;
+let cntrlDown  =  0;
+
+document.onkeydown = (e) => {
+	if (shiftDown == 1) {
+		if (e.key == 'Enter')     { e.preventDefault(); eval(paper.value); }
+		if (e.key == 'ArrowLeft') { e.preventDefault(); layout.shift(-20,0); }
+		if (e.key == 'ArrowRight'){ e.preventDefault(); layout.shift( 20,0); }
+		if (e.key == 'ArrowDown') { e.preventDefault(); layout.shift(0,-20); }
+		if (e.key == 'ArrowUp')   { e.preventDefault(); layout.shift(0, 20);}}
+	
+	if (cntrlDown == 1) {
+		if (e.key == 's') {	e.preventDefault();	localStorage.script = paper.value; 
+							print('-- script saved --');}    
+	    if (e.key == 'o') {	e.preventDefault();	paper.value = localStorage.script;
+	    					print('-- script retrieved --'); }}
+
+	if (e.key == 'Shift')   { shiftDown = 1; }
+	if (e.key == 'Control') { cntrlDown = 1; }}
+
+document.onkeyup = (e) => { 
+	if (e.key == 'Shift')   shiftDown = 0; cntrlDown = 0;}
+
+function Layout() {
+	this.x    = 40;
+	this.y    = 40;
+	this.shift = (dx, dy) => {
+		this.x += dx;
+		this.y += dy;
+		if (dx != 0) {	set_pos(paper,    0,      0, this.x,     100);
+						set_pos(printout, this.x, 0, 100-this.x, 100);}
+		
+		if (dy != 0) {	set_pos(paper,    0, 100-this.y, 100, this.y);
+						set_pos(printout, 0, 0, 		 100, 100-this.y); }}}
+
+function axis(pos=[5,5,60,30], lims=[0,0,100,100]) {
+
+	this.canvas = document.createElement('canvas'); 
+	this.ctx    = this.canvas.getContext('2d'); 
+		printout.appendChild(this.canvas);
+
+	this.canvas.style.backgroundColor = '#cccccc';
+	this.canvas.style.position = 'absolute';
+
+	this.pos = (pos) => {
+		this.pos_data = pos;
+		this.canvas.style.left   = pos[0] + '%';			
+		this.canvas.style.top    = pos[1] + '%';			
+		this.canvas.style.width  = pos[2] + '%';			
+		this.canvas.style.height = pos[3] + '%'; 
+		this.winPos = this.canvas.getBoundingClientRect();
+		this.canvas.width  = this.winPos.width;
+		this.canvas.height = this.winPos.height; }
+
+	this.lims = (lims_data) => { this.lims_data = lims_data; }
+
+	this.text = (x, y, string) => {
+		let xp = (x - this.lims_x);
+		let yp = (y - this.lims_y); 
+		this.ctx.fillText(string, xp,yp);}
+
+	this.line = (x, y, color='#000000') => {
+		this.ctx.strokeStyle = '#000000';
+
+		for (let i = 0; i < x.length-1; i++) {
+			let x0 = (x[i]  -this.lims_data[0])/this.lims_data[2]*this.canvas.width;
+			let y0 = (y[i]  -this.lims_data[1])/this.lims_data[3]*this.canvas.height;
+			let x1 = (x[i+1]-this.lims_data[0])/this.lims_data[2]*this.canvas.width;
+			let y1 = (y[i+1]-this.lims_data[1])/this.lims_data[3]*this.canvas.height;
+			
+			this.ctx.beginPath();		
+			this.ctx.moveTo(x0, y0);
+			this.ctx.lineTo(x1, y1);
+		
+			this.ctx.stroke();}}
+
+	this.info = () => {	print(
+		`pos(x,y,w,h) = (
+			${this.canvas.style.left}, ${this.canvas.style.width}, 
+			${this.canvas.style.top},  ${this.canvas.style.height})<br>
+
+		lims(x,y,w,h) = (
+			${this.lims_x}, ${this.lims_y}, 
+		    ${this.lims_w}, ${this.lims_h})`);}
+
+	this.pos(pos);
+	this.lims(lims);} 
+
+/*---------------------- Utility Functions ----------------*/   
+function linspace(low, high, n) {
+    let array = new Float32Array(n);
+    for (let i = 0; i < n; i++) array[i] = i*(high-low)/n;
+    return array;}
+
+function random(low, high, n) {
+    let array = new Float32Array(n);
+    for (let i = 0; i < n; i++) {
+        array[i] = low + (high-low)*Math.random();}
+    return array;}
+
+function cos(theta) { return Math.cos(theta); }
+function print(string) { printout.innerHTML += string + '<br>';}
+function clear() { printout.innerHTML  = '';}
+function set_pos(el, x,y,w,h) {
+	el.style.left   = x + '%';			
+	el.style.top    = y + '%';			
+	el.style.width  = w + '%';			
+	el.style.height = h + '%'; }
+</script>
+
+<!-- - - - - - - - - - - - - - - Document - - - - - - - - - - - - - - -->
+<style> 
+	body {  background-color:#555555;}
+	div { 	position:fixed; background-color:#222222; color:#ffffff; }
+	textarea {position:fixed; background-color:#111111; color:#ddddff;
+		      font-family:mono; font-size:24px; border:none; outline:none; resize:none;}
+</style>
+
+<textarea id='paper' spellcheck = 'false' style=
+	"left:0%; width:60%; top:0%; height:100%; padding:10px;"> 
+clear();
+let ax1 = new axis([5, 5, 50, 30], [ 0, 0, 10, 10]);
+let ax2 = new axis([5,40, 50, 30], [ 0, 0, 10, 10]);
+
+let x = linspace(0,10,10);
+let y = random(0,10,10);
+
+ax1.line(x,y);
+ax2.line(y,x);
+</textarea>
+
+<div id='printout' style=
+    "top:0%; left:60%; width:40%;    height:100%;      font-family:mono;
+    font-size:20px;   padding:10px;  resize:none;"> 
+</div> 
