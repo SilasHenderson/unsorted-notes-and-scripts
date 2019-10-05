@@ -1,0 +1,52 @@
+<!doctype html> <html> <body> <script>
+
+let _Stack  = [];		
+let _Active = 0;
+let _shift  = 0;
+
+new Block();
+
+/*--------------------------------------------------------------------------------*/
+function Block() {	
+	this.text_p    = document.createElement('p');	document.body.appendChild(this.text_p);
+	this.text_div  = document.createElement('div'); this.text_p.appendChild(this.text_div);
+
+	this.print_p   = document.createElement('p');	document.body.appendChild(this.print_p);
+	this.print_div = document.createElement('div');	this.print_p.appendChild(this.print_div);
+
+	this.text_div.display = 'block';			this.text_div.style.margins = 20;
+	this.text_div.contentEditable = true;		this.text_div.style.color = '#000000';
+	this.text_div.innerHTML = "print('a');";	this.text_div.style.fontFamily = 'mono';	
+	this.text_div.style.backgroundColor = '#e4e4e4';
+		
+	this.text_div.onfocus = () => { 
+		this.text_div.style.backgroundColor = '#e8eaee'; }
+
+
+	this.text_div.onblur  = () => { 
+		this.text_div.style.backgroundColor = '#e4e4e4'; }
+
+	this.text_div.onkeydown = (e) => {
+		if ( _shift == 1) {
+			if (e.key == 'Enter') { e.preventDefault(); eval(this.text_div.innerHTML); }}}
+
+	this.text_div.focus();
+	this.print_div.innerHTML = '';
+	
+	_Active = _Stack.length; _Stack.push(this);}
+
+function print(string) { _Stack[ _Active ].print_div.innerHTML = string;}
+
+
+document.onkeydown = (e) => { 
+	if (e.key == 'Shift') { _shift = 1; }
+	if ( _shift == 1) {
+		if (e.key == 'ArrowDown') { e.preventDefault(); 
+			if ( _Active < _Stack.length ) { new Block;}}}}
+
+
+
+document.onkeyup = (e) => { if (e.key == 'Shift') _shift = 0; }
+
+
+</script> </body> </html>
