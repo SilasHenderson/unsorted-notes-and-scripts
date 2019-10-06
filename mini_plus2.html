@@ -1,0 +1,199 @@
+<!doctype html> <html> <head> <script>
+
+/*--------------------- Global Key Fcns -----------------------------*/
+let _cntrl = 0;
+let _shift = 0;
+let _active_block = 0;
+
+let _mouse_down =  0;
+let _anchor_pos = [0,0];
+
+
+document.onkeydown = (e) => {
+	if (e.key == 'Control') { _cntrl = 1; }  
+	if (e.key == 'Shift')   { 
+		if   ( _shift == 1) { e.preventDefault(); Block();}
+		else { _shift = 1;} }
+	if (e.key == 's' && _cntrl == 1) { e.preventDefault(); save(); }
+	if (e.key == 'o' && _cntrl == 1) { e.preventDefault(); open(); }}
+
+document.onkeyup = (e) => { 
+	if (e.key == 'Shift')   { _shift = 0; }
+	if (e.key == 'Control') { _cntrl = 0; }}
+
+document.onmousedown = () => { _mouse_down = 1; }
+document.onmouseup   = () => { _mouse_down = 0; }
+
+/* ---------------------- Make-Block Fcn -------------------------- */
+function Block(string = '// ') {
+	let div = document.createElement('div');document.body.append(div);
+	let p   = document.createElement('p');	div.append(p);
+	p.display = 'block';					p.style.margins = 10;
+	p.contentEditable = true;				p.style.color = '#000000';
+	p.style.fontFamily = 'mono';			p.style.backgroundColor = '#e4e4e4';
+	p.innerHTML = string; 					p.style.outline = 'none'; 					
+	p.onkeydown = (e) => { if (_shift == 1) {
+	if (e.key == 'Enter')    { e.preventDefault(); eval(p.textContent);}
+	if (e.key == 'Backspace'){ e.preventDefault(); 
+		document.body.removeChild(div);}}}
+	
+	p.onfocus = (e) => { _active_block = div; }
+	p.focus();}
+
+/*------------------------- Save, Open, Files -----------------------*/
+function open(file='file0') { 
+	clear_all();
+	let text_mash = localStorage.getItem(file);
+	let text = '';
+	let idx  = 0;
+	while (idx < text_mash.length) {
+		if (idx < text_mash.length - 3) {
+			if (text_mash[idx] == '-') { if (text_mash[idx+1] == '-') { 
+				if (text_mash[idx+2] == '-') { 
+					Block(text);	
+					text = ''; 	 		idx+=3; }}}}
+	text += text_mash[idx]; 	idx++; }
+	Block(text);
+	print(`file opened: ${file}`)}
+
+function save(file='file0') { 
+	clear();
+	let divs = document.getElementsByTagName('div');
+	let print_text = [];
+	let save_text  = '';
+	
+	for (let i = 0; i < divs.length; i++) { 
+		let content = divs[i].firstChild.innerHTML;
+		print_text.push(content); 	save_text+=content;
+		if (i < divs.length - 1) {  save_text+='---'; } }
+	
+	localStorage.setItem(file, save_text); 
+	print( `<b> <font color='#552222'> '${file}'</font> </b> 
+		<i> <font color='#334455'> &#8592 file saved </font> </i><br>
+			${vlist(print_text)}`);}
+
+function files() {
+	clear();
+	for (let i in localStorage) {
+		if (i != 'setItem'  && i != 'removeItem' &&
+			i != 'getItem'  && i != 'clear' &&
+			i != 'key' 		&& i != 'length') {	
+			print("'" + i + "'", 'p', randomColor());}}
+	Block();}
+
+/*------------------------ Drawing Functions -- ---------------*/	
+function axis() {
+	let parent = document.activeElement.parentNode;
+	if (parent.nodeName != "DIV") { parent = _active_block; }
+	let canvas = document.createElement('canvas');
+		canvas.style.backgroundColor = '#cccccc';
+	parent.append(canvas); 
+
+	canvas.onmouseover = (e) => { 
+		canvas.style.border = 'solid';
+		canvas.style.borderWidth = '1px';
+		_anchor_pos = [canvas.getBoundingClientRect().x, 
+	                   canvas.getBoundingClientRect().y]; }
+	
+	canvas.onmouseout  = (e) => { canvas.style.border = 'none'; }
+	canvas.onmousemove = (e) => { 
+		let mx = e.clientX - _anchor_pos[0];
+		let my = e.clientY - _anchor_pos[1];
+
+		if (_mouse_down == 1) {
+			canvas.width  = e.clientX - _anchor_pos[0];
+			canvas.height = e.clientY - _anchor_pos[1]; }}}
+	
+function getBounds(canvas) {
+	let lims = canvas.getBoundingClientRect();
+	print(lims.width);
+	print(lims.height);
+	print(lims.x);
+	print(lims.y);}
+
+function plot(x=0, y=0, color = '#449944') {
+	let parent = document.activeElement.parentNode;
+	if (parent.nodeName != "DIV") { parent = _active_block; }
+	if (parent.getElementsByTagName('canvas').length == 0) { axis(); }
+	
+	let canvas = parent.getElementsByTagName('canvas')[0];
+	let ctx = canvas.getContext('2d');
+	
+		ctx.fillStyle = color;
+		ctx.fillRect(x,y,50,50); }
+
+function line(x=[0,100], y = [0,100]) {
+	let parent = document.activeElement.parentNode;
+	if (parent.nodeName != "DIV") { parent = _active_block; }
+	if (parent.getElementsByTagName('canvas').length == 0) { axis(); }
+	
+	let canvas = parent.getElementsByTagName('canvas')[0];
+	let ctx = canvas.getContext('2d');
+		ctx.strokeStyle = '#000000';
+		ctx.beginPath(); 
+		
+	for (let i = 0; i < x.length-1; i++) {
+		ctx.moveTo(x[i], y[i]);
+		ctx.lineTo(x[i+1], y[i+1]);
+		ctx.stroke(); }
+
+	ctx.endPath();}
+
+/*------------------------ Print / Format Functions ---------------*/
+function print(string = '...', elem_type = 'p', color = '#000000') {
+	let parent = document.activeElement.parentNode;
+	if (parent.nodeName != "DIV") { parent = _active_block; }
+	let p = document.createElement(elem_type);
+		p.innerHTML = string; 
+		p.style.color = color;
+	parent.append(p);}
+
+function printup(string = '...', elem_type = 'p', color = '#000000') {	
+	let parent = document.activeElement.parentNode;
+	if (parent.nodeName != "DIV") { parent = _active_block; }
+	let p = document.createElement(elem_type);
+		p.innerHTML = string; 
+		p.style.color = color;
+	parent.prepend(p);}
+
+function clear() {
+	let main = document.activeElement;	
+	let div  = document.activeElement.parentNode;
+	div.innerHTML = '';	
+	div.append(main);  }
+
+function clear_all() {
+	while (document.body.children.length > 0) { 
+		document.body.removeChild(document.body.children[0]);}
+	document.body.textContent = '';}
+
+/*--------------------- Utility Functions ------------------------*/
+function vlist(array) {
+	let string = '';
+	for (let i = 0; i < array.length; i++) {
+		string += array[i]; string +='<br>'; }
+	return string; }
+
+function linspace(low, high, n) {
+    let array = new Float32Array(n);
+    for (let i = 0; i < n; i++) array[i] = i*(high-low)/n;
+    return array;}
+
+function random(low, high, n) {
+    let array = new Float32Array(n);
+    for (let i = 0; i < n; i++) {
+        array[i] = low + (high-low)*Math.random();}
+    return array;}
+
+function randomColor() {
+	let c = 100000 + 500000*Math.random();
+	c = '#' + c.toFixed();	return c;}
+
+function cos(theta) { return Math.cos(theta); }
+
+/*--------------------------- Main ----------------------------------*/
+</script> </head> <body> <script>  
+Block(`print('repl')`);
+
+printup("it's repl time!", 'h2');
+</script> </body> <!-- $:\^$# --> </html>
