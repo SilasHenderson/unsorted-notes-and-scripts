@@ -1,0 +1,83 @@
+<!doctype html> 
+<head> 
+<link href="katex.css" rel="stylesheet">
+<script src="katex.js"> </script> 
+
+<script>
+let _shift = 0;
+let _cntrl = 0;
+document.onkeydown = (e) => {
+	if (e.key == 'Control') { _cntrl = 1; }  
+	if (e.key == 'Shift')   { 
+		if   ( _shift == 1) { e.preventDefault(); Block();}
+		else { _shift = 1;} }
+	if (e.key == 's' && _cntrl == 1) { e.preventDefault(); save(); }
+	if (e.key == 'o' && _cntrl == 1) { e.preventDefault(); open(); }}
+
+document.onkeyup = (e) => { 
+	if (e.key == 'Shift')   { _shift = 0; }
+	if (e.key == 'Control') { _cntrl = 0; }}
+
+
+function disp(string = '...', elem_type = 'katex-container', color='#000000') {
+	let parent = document.activeElement.parentNode;
+	if (parent == Container) {parent = _active_block; }
+	if (parent.nodeName != "DIV") { parent = _active_block; }
+
+	let el = document.createElement(elem_type);
+		el.innerHTML = string; 
+		katex.render( string, el);
+		
+	parent.append(el);}
+
+// function 
+// var katexContainer = document.getElementById('katex-container');
+// katex.render(
+
+//     katexContainer);
+
+
+
+
+function Block(string = '//', run=true) {
+	let div = document.createElement('div');Container.append(div);
+	div.style.margins = '20px';
+
+	let p = document.createElement('p');	div.append(p);
+	p.style.margins = '10px';
+	p.contentEditable = true;				// p.style.color = '#000000';
+	p.style.fontFamily = 'mono';			p.style.backgroundColor = '#eeeeee';
+	p.innerHTML = string; 					p.style.outline = 'none'; 			
+	p.style.borderRadius = '5px';			p.spellcheck = false;	
+	p.style.border  = '1px solid #5588aa';	p.style.padding = '10px';
+
+	p.onkeydown = (e) => { if (_shift == 1) {
+		if (e.key == 'Enter'){ 
+			e.preventDefault(); eval(p.textContent); }
+		if (e.key == 'Backspace'){ 
+			e.preventDefault(); Container.removeChild(div); }
+		if (e.key == 'Control'){ 
+			e.preventDefault();	clear(); }}}
+
+	p.onfocus = (e) => { _active_block = div; }
+
+	p.focus();
+	if (run == true) { eval(p.textContent);	} }
+</script> </head>
+
+<body>
+
+<script>
+let Container = document.createElement('div');
+	document.body.append(Container);
+
+	Container.style.margin = '5% 3% 2% 2%';
+	Container.style.backgroundColor = '#dddddd';
+	Container.style.padding = '10px';
+	Container.style.border = '2px solid #000000';
+	Container.style.borderRadius = '10px';
+
+Block();
+
+</script>
+</body>
