@@ -1,0 +1,266 @@
+<!doctype html> <html> <head> 
+<link href="katex.css" rel="stylesheet">
+<script src="katex.js"> </script> 
+<script src="three.min.js"> </script>
+<script>
+
+/*--------------------- Global Key Fcns -----------------------------*/
+let _cntrl = 0;
+let _shift = 0;
+let _active_block = 0;
+let _mouse_down   = 0;
+
+let _active_canvas = 0;
+let _active_axis_lims = [0,0,100,100];
+
+window.onerror = (msg, url, line) =>{ print(msg + '<br>','p', '#882222'); }
+
+document.onkeydown = (e) => {
+	if (e.key == 'Control') { _cntrl = 1; }  
+	if (e.key == 'Shift')   { 
+		if   ( _shift == 1) { e.preventDefault(); Block();}
+		else { _shift = 1;} }
+	if (e.key == 's' && _cntrl == 1) { e.preventDefault(); save(); }
+	if (e.key == 'o' && _cntrl == 1) { e.preventDefault(); open(); }}
+
+document.onkeyup = (e) => { 
+	if (e.key == 'Shift')   { _shift = 0; }
+	if (e.key == 'Control') { _cntrl = 0; }}
+
+document.onmousedown = () => { _mouse_down = 1; }
+document.onmouseup   = () => { _mouse_down = 0; }
+
+/* ---------------------- Make-Block Fcn -------------------------- */
+function Block(string = '//', run=true) {
+	let div = document.createElement('div');Container.append(div);
+	div.style.margins = '20px';
+
+	let p = document.createElement('p');	div.append(p);
+	p.style.margins = '10px';
+	p.contentEditable = true;				// p.style.color = '#000000';
+	p.style.fontFamily = 'mono';			p.style.backgroundColor = '#eeeeee';
+	p.innerHTML = string; 					p.style.outline = 'none'; 			
+	p.style.borderRadius = '5px';			p.spellcheck = false;	
+	p.style.border  = '1px solid #5588aa';	p.style.padding = '10px';
+
+	p.onkeydown = (e) => { if (_shift == 1) {
+		if (e.key == 'Enter'){ 
+			e.preventDefault(); eval(p.textContent); }
+		if (e.key == 'Backspace'){ 
+			e.preventDefault(); Container.removeChild(div); }
+		if (e.key == 'Control'){ 
+			e.preventDefault();	clear(); }}}
+
+	p.onfocus = (e) => { _active_block = div; }
+
+	p.focus();
+	if (run == true) { eval(p.textContent);	} }
+
+/*------------------------- Save, Open, Files -----------------------*/
+function open(file='file0') { 
+	clear_all();
+	let text_mash = localStorage.getItem(file);
+	let text = '';
+	let idx  = 0;
+	while (idx < text_mash.length) {
+		if (idx < text_mash.length - 3) {
+			if (text_mash[idx] == '-') { if (text_mash[idx+1] == '-') { 
+				if (text_mash[idx+2] == '-') { 
+					Block(text); text = ''; idx+=3; }}}}
+	text += text_mash[idx]; idx++; }
+	Block(text);
+	title(`${file}`, 'h3')}
+
+function save(file='file0') { 
+	clear();
+	let divs = Container.getElementsByTagName('div');
+	let print_text = [];
+	let save_text  = '';
+	
+	for (let i = 0; i < divs.length; i++) { 
+		let content = divs[i].firstChild.innerHTML;
+		print_text.push(content); 	save_text+=content;
+		if (i < divs.length - 1) {  save_text+='---'; } }
+	
+	localStorage.setItem(file, save_text); 
+	print( `<b> <font color='#552222'> '${file}'</font> </b> 
+		<i> <font color='#334455'> &#8592 file saved </font> </i><br>
+			${vlist(print_text)}`);}
+
+function files() {
+	clear();
+	for (let i in localStorage) {
+		if (i != 'setItem'  && i != 'removeItem' &&
+			i != 'getItem'  && i != 'clear' &&
+			i != 'key' 		&& i != 'length') {	
+			print("'" + i + "'", 'p', randomColor());}}}
+
+/*------------------------ Drawing Functions -- ---------------*/	
+function plot(x = [0,1], y = [0,1]) {
+	let parent = document.activeElement.parentNode;
+	if (parent == Container) { parent = _active_block; }
+	if (parent.nodeName != "DIV") { parent = _active_block; }
+	let canvas_array = parent.getElementsByTagName('canvas');
+	
+	let canvas;
+	if (canvas_array.length > 0) { canvas = canvas_array[0]; }
+	else {	canvas = document.createElement('canvas');
+			canvas.style.backgroundColor = '#ffffff';
+			parent.append(canvas); } 
+	
+	canvas.width = 500;
+	canvas.height = 200;
+	canvas.style.position = 'relative';
+	canvas.style.left = '10%';
+	let ctx = canvas.getContext('2d');
+	let x_min = min(x);	let y_min = min(y);
+	let x_max = max(x);	let y_max = max(y);
+	
+	for (let i = 0; i < x.length-1; i++) {
+		let x0 = (x[i]   - x_min)/(x_max - x_min)*canvas.width;
+		let y0 = (y[i]   - y_min)/(y_max - y_min)*canvas.height;
+		let x1 = (x[i+1] - x_min)/(x_max - x_min)*canvas.width;
+		let y1 = (y[i+1] - y_min)/(y_max - y_min)*canvas.height;
+		
+		ctx.moveTo(x0, y0);  
+		ctx.lineTo(x1, y1); 
+		ctx.stroke();}
+
+	canvas.onmouseover = (e) => { canvas.style.border = '1px solid #778899';}	
+	canvas.onmouseout  = (e) => { canvas.style.border = 'none'; }
+	canvas.onmousemove = (e) => { if ( _mouse_down == 1) {
+		canvas.width = e.clientX - canvas.getBoundingClientRect().x + 100;
+		canvas.height= e.clientY - canvas.getBoundingClientRect().y + 100;}}}
+
+/*------------------------ Print / Format Functions ---------------*/
+function print(string = '...', elem_type = 'p', color = '#000000') {
+	let parent = document.activeElement.parentNode;
+	if (parent == Container) {parent = _active_block; }
+	if (parent.nodeName != "DIV") { parent = _active_block; }
+
+	let p = document.createElement(elem_type);
+		p.innerHTML = string; 
+		p.style.color = color;
+	parent.append(p);}
+
+function title(string = '...', elem_type = 'p', color = '#000000') {
+	let p = document.createElement(elem_type);
+		p.innerHTML = string; 
+		p.style.color = color;
+	Container.firstChild.prepend(p); }
+
+function printup(string = '...', elem_type = 'p', color = '#000000') {	
+	let parent = document.activeElement.parentNode;
+	if (parent.nodeName != "DIV") { parent = _active_block; }
+	let p = document.createElement(elem_type);
+		p.innerHTML = string; 
+		p.style.color = color;
+	parent.prepend(p);}
+
+function clear() {
+	let main = document.activeElement;	
+	let div  = document.activeElement.parentNode;
+	div.innerHTML = '';	
+	div.append(main);  }
+
+function clear_all() {
+	while (Container.children.length > 0) { 
+		Container.removeChild(Container.children[0]);}
+		Container.textContent = '';}
+
+function disp(string = '...', elem_type = 'katex-container', color='#000000') {
+	let parent = document.activeElement.parentNode;
+	if (parent == Container) { parent = _active_block; }
+	if (parent.nodeName != "DIV") { parent = _active_block; }
+
+	let el = document.createElement(elem_type);
+		el.innerHTML = string; 
+		katex.render( string, el);
+		
+	parent.append(el);}
+
+/*--------------------- Utility Functions ------------------------*/
+function cos(theta) { return Math.cos(theta); }
+
+function min(array) {
+	let min = 1e6;
+	for (let i = 0; i < array.length; i++) {
+		if ( array[i] < min ) min = array[i];}
+	return min;}
+
+function max(array) {
+	let max = -1e6;
+	for (let i = 0; i < array.length; i++) {
+		if ( array[i] > max ) max = array[i];}
+	return max;}
+
+function linspace(low, high, n) {
+    let array = new Float32Array(n);
+    for (let i = 0; i < n; i++) array[i] = i*(high-low)/n;
+    return array;}
+
+function rand() { return Math.random();}
+
+function random(low, high, n) {
+    let array = new Float32Array(n);
+    for (let i = 0; i < n; i++) {
+        array[i] = low + (high-low)*Math.random();}
+    return array;}
+
+function randomColor() {
+	let c = 100000 + 500000*Math.random();
+	c = '#' + c.toFixed();	return c;}
+
+function vlist(array) {
+	let string = '';
+	for (let i = 0; i < array.length; i++) {
+		string += array[i]; string +='<br>'; }
+	return string; }
+</script> 
+
+<!-- - - - - - - - - - - - Document - - - - - - - - - -->
+<style> 
+	body { background-color:#222222;  margin:0; }
+	.btn {  top:0%;         height:5%;      color:#000000;   
+          	width:10%;   	position:fixed;	background-color:#aab4be;
+          	border:none;	font-family:arial; 
+          	resize:none;    overflow:hidden;}
+	.btn:hover{ background-color:#aac0b0;  color:#000000;}
+	.btn:active{ background-color:#333333; color:#cccccc;} 
+
+</style> </head> 
+
+<body> 
+
+<button class="btn" style="left:0%;"><b> one </b></button>
+<button class="btn" style="left:10%;"><b> two </b></button>
+<button class="btn" style="left:20%;"><b> three</b></button>
+<button class="btn" style="left:30%;"><b> four </b> </button>
+<button class="btn" style="left:40%;"><b> five </b> </button>
+<button class="btn" style="left:50%;"><b> sive</b> </button>
+<button class="btn" style="left:60%;"><b> seven</b></button>
+<button class="btn" style="left:70%;"><b>eight </b></button>
+<button class="btn" style="left:80%;"><b>nine</b> </button>
+<button class="btn" style="left:90%;"><b>ten</b><button>
+
+
+<!-- - - - - - - - - - - - - Init - - - - - - - - -->
+<script>  
+let Container = document.createElement('div');
+	document.body.append(Container);
+
+	Container.style.margin = '2% 3% 2% 2%';
+	Container.style.backgroundColor = '#dddddd';
+	Container.style.padding = '10px';
+	Container.style.border = '2px solid #000000';
+	Container.style.borderRadius = '10px';
+
+Block(	`clear(); <br>
+		printup('plot demo', 'h2'); <br> 
+		let y = random(0, 10, 10); <br> 
+		let x = linspace(0,10,10); <br> 
+		plot(x,y);`);
+
+</script> 
+
+</body> <!-- $:\^$# --> </html>
