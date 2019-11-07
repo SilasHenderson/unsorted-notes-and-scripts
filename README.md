@@ -5,3 +5,6 @@
 * `mini_plus.html`: -- experiments with 'plot' function
 * `ktext_test.html`: test with katex library
 * `repl_div.html`: add error messaging
+
+#### Gui Notes
+* `paint_min3.html`: gives canvas point-and-click drawing
