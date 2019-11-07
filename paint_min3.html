@@ -1,0 +1,60 @@
+<!doctype html>
+
+<canvas id='canvas' style =
+	'left:0%; width:100%; top:0%; height:100%; position:fixed;'> 
+</canvas>
+
+<script>
+
+let paint = paint_make('canvas')
+
+function paint_make(canvas_id) {
+
+	let paint = {};
+	
+	paint.canvas = document.getElementById(canvas_id);
+	paint.ctx    = paint.canvas.getContext('2d');
+	
+	paint.set_frame = () => {
+		paint.pixel_left   = paint.canvas.getBoundingClientRect().x;
+		paint.pixel_up     = paint.canvas.getBoundingClientRect().y;
+		paint.pixel_width  = paint.canvas.getBoundingClientRect().width;
+		paint.pixel_height = paint.canvas.getBoundingClientRect().height;
+	
+		paint.canvas.width  = paint.pixel_width;  // align pixels
+		paint.canvas.height = paint.pixel_height; }	
+
+	paint.set_brush = (size=6, color='#dddddd') => {
+		paint.ctx.lineWidth   = size;
+		paint.ctx.strokeStyle = color;}
+
+	paint.clear = (background_color) => {
+		paint.ctx.fillStyle = paint.background_color = background_color;
+		paint.ctx.fillRect(0,0, paint.pixel_width, paint.pixel_height);	}
+
+	paint.canvas.onmousedown = (e) => {	
+		paint.mouse_down = 1;
+		paint.mouse_x_last = e.clientX - paint.pixel_left;
+		paint.mouse_y_last = e.clientY - paint.pixel_up; }
+
+	paint.canvas.onmouseup = (e) => {
+		paint.mouse_down = 0; }
+
+	paint.canvas.onmousemove = (e) => {
+		if (paint.mouse_down == 1) {
+			paint.ctx.beginPath();
+			paint.ctx.moveTo( paint.mouse_x_last , paint.mouse_y_last );
+			paint.ctx.lineTo( e.clientX - paint.pixel_left,
+				              e.clientY - paint.pixel_up); 	
+			paint.ctx.stroke( ); }
+		
+		paint.mouse_x_last = e.clientX - paint.pixel_left; 
+		paint.mouse_y_last = e.clientY - paint.pixel_up; }
+
+	paint.set_frame();
+	paint.set_brush();	
+	paint.clear();
+	return paint;}
+
+// s.#
+</script>
