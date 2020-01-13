@@ -1,0 +1,177 @@
+<!doctype html> <!-- ~|-| -->
+
+<head>
+
+<script src="three.min.js">  </script> 
+<script src="codemirror.js"> </script>
+<script src="javascript.js"> </script>
+
+<link rel="stylesheet" href="codemirror.css">
+<link rel="stylesheet" href="abcdef.css">
+
+</head>
+
+<body>
+
+<div id='top_div' style=
+	'position:fixed; left:0%; top:0%; width:100%; height:4.8%;
+	 background-color:#000000;
+	 color:#ffffff;'> 
+</div>
+
+<div id='line_div' style=
+	'position:fixed; left:0%; top:4.8%; width:100%; height:.2%;
+	 background-color:#aabbcc;'> 
+</div>
+
+<div id='code_div' style=
+	'position:fixed; left:0%; top:5%; width:60%; height:95%;'> 
+</div>
+
+<canvas id='canvas' style=
+	'position:fixed; left:60%; top:5%; width:40%; height:55%;
+	 background-color:#cccccc;'> 
+</canvas>
+
+<div id='output' style=
+	'position:fixed; left:60%; top:60%; width:40%; height:40%;
+     background-color:#000000;
+	 color:#cccccc;
+	 font-family:monospace;
+	 font-size:smaller;
+	 font-weight:bold;
+	 padding:10px;'> 
+</div>
+
+<script>
+
+let default_code = //localStorage.save_01 ||
+`clear_canvas();
+
+let camera = make_camera([10,10,5], [0,0,0]);
+let light = make_spot_light([0,0,5]);
+
+let box = make_box([0,0,4], [2,2,.3]);
+
+let cyl = make_cylinder([0,0,0], [1,1], 10);
+
+let iter = 0;
+
+function loop() {
+ 	iter++;
+    box.rotation.x += .05;
+    box.rotation.y += .03;
+   	renderer.render(scene, camera);
+    if (iter < 200) {
+     	requestAnimationFrame(loop);}}
+loop();
+
+localStorage.save_01 = code_mirror.getValue();
+
+output.innerHTML = new Date().toString().slice(0,28);`;
+
+let code_div = document.getElementById('code_div');
+let output   = document.getElementById('output');
+let canvas   = document.getElementById('canvas');
+
+let code_mirror = CodeMirror(code_div, {
+	mode:'javascript', 
+	lineNumbers:true, 
+	theme:'abcdef'});
+
+code_mirror.setSize('100%','100%');
+code_mirror.setValue( default_code);
+
+let renderer = new THREE.WebGLRenderer({canvas:canvas, antialias:true});
+	renderer.setSize( canvas.clientWidth, canvas.clientHeight);  
+	renderer.setClearColor(0x778899);
+	renderer.setPixelRatio(canvas.clientWidth/canvas.clientHeight);
+
+renderer.shadowMapEnabled = true;
+
+let scene = new THREE.Scene();
+let camera = make_camera([10,10,5], [0,0,0]);
+let light = make_spot_light([0,0,5]);
+
+/*------------------------ Utility Functions --------------------------*/
+function cos(x)  { return Math.cos(x);  }
+function sin(x)  { return Math.sin(x);  }
+function tan(x)  { return Math.tan(x);  }
+function abs(x)  { return Math.abs(x);  }
+function sqrt(x) { return Math.sqrt(x); }
+function rand()  { return Math.random();}
+
+function clear_canvas() {
+	while (scene.children.length > 0) {
+		scene.remove(scene.children[0]);}}
+
+function make_camera(pos, targ, up=[0,0,1]) {
+	let cameraa = new THREE.PerspectiveCamera(
+  		40, canvas.clientWidth/canvas.clientHeight, .1, 1000); 
+
+	cameraa.position.set(pos[0], pos[1], pos[2]);
+	cameraa.up = new THREE.Vector3(0,0,1);
+	cameraa.lookAt(targ[0], targ[1], targ[2]);
+
+	return cameraa;}
+
+function make_spot_light(pos, color=0xccccff) {
+	let lite = new THREE.SpotLight(color, 5);
+		lite.position.set(pos[0], pos[1], pos[2]);
+
+	lite.castShadow = true;
+	lite.shadowDarkness = .5;
+
+	lite.shadow.mapSize.width = 1024;
+	lite.shadow.mapSize.height = 1024;
+
+	lite.shadow.camera.near = 500;
+	lite.shadow.camera.far = 4000;
+	lite.shadow.camera.fov = 30;
+	
+	scene.add(lite);
+	return lite;}
+
+function make_box(pos, dim=[1,1,1], color=random_color()) {
+    let box = new THREE.Mesh( 
+        new THREE.BoxGeometry(dim[0], dim[1], dim[2]), 
+        new THREE.MeshLambertMaterial({color:color}));
+    
+    box.position.set(pos[0], pos[1], pos[2]);
+    box.recieveShadow = true;
+    box.castShadow = true;
+	
+	scene.add(box);
+	return box;}
+
+function make_cylinder(pos, radii, len, color=random_color()) {
+    let cylinder = new THREE.Mesh( 
+        new THREE.CylinderGeometry(radii[0], radii[1], len, 20,20),   
+        new THREE.MeshLambertMaterial({color:color}));
+    
+    cylinder.position.set(pos[0], pos[1], pos[2]);
+    cylinder.recieveShadow = true;
+    cylinder.castShadow = true;
+    
+    scene.add(cylinder);
+    return cylinder;}
+
+function random_color() {
+	let color = '#';
+	for (let c = 0; c < 6; c++) {
+		let num = Math.floor(8*Math.random());
+		color += num;}
+	return color;}
+
+// - - - key press fcn: shift+enter - - - //
+let shift_down = 0;
+document.onkeyup   = ( ) => {shift_down = 0;}
+document.onkeydown = (e) => { 
+	if (e.key == 'Shift') { shift_down = 1;}
+	if (e.key == 'Enter') {
+		if (shift_down == 1) {
+			e.preventDefault();
+			eval(code_mirror.getValue());}}}
+</script>
+
+</body>
