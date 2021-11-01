@@ -1,3 +1,5 @@
+random notes, unsorted.  lots of scripts don't work or are in-progress 
+
 #### Client-Side Notebooks (tests)
 
 * `block.html`:  object format for js repl
