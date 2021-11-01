@@ -1,4 +1,4 @@
-random notes, unsorted.  lots of scripts don't work or are in-progress 
+these scripts mostly don't work or are in-progress 
 
 #### Client-Side Notebooks (tests)
 
