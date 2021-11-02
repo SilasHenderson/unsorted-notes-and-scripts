@@ -1,0 +1,27 @@
+<meta charset='utf-8'>
+<script src='d3.js'> </script>
+
+<body>
+<p id='p'></p>
+
+<script>
+
+let w = 300, h = 300;
+
+let svg = d3.select('body').append('svg')
+	.attr('width', w)
+	.attr('height',h)
+	.style('border', 'solid 1px')
+	.style('border-radius', '5px')
+
+let data = d3.range(0,300).map(x=>[x,Math.sin(x)])
+
+let line = d3.line().x(d=>d[0]).y(d=>d[1]);
+
+svg.append('path')
+  .datum(data)
+  .attr('d', line)
+p.innerHTML = line
+
+</script>
+</body>

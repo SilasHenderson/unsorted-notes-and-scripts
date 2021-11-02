@@ -1,0 +1,60 @@
+<meta charset='utf-8'>
+<script src='d3.js'> </script>
+
+<body>
+<script>
+
+function Plot = (data) => {
+
+	let plot = {
+		size:[500,500],
+		pos: [.1,.1,.8,.8],
+		xlim:[0,1], 
+		ylim:[0,1],
+		svg: d3.select('body').append('svg')
+   	}
+
+   	plot.xlim = d3.min()
+	let xScale = d3.scaleLinear()
+		.domain([d3.min(data,d=>d[0]),d3.max(data,d=>d[0])])
+	.range([ 0, svg.attr('width')])
+	let yScale = d3.scaleLinear();
+
+
+
+	.domain([d3.min(data,d=>d[1]), d3.max(data,d=>d[1])])
+	.range([ svg.attr('height'), 0])
+
+   	}
+
+   	return fig;
+}
+
+let svg_size = [500,500];
+let ax_pos = [.1,.1,.8,.8];
+let xlim = [];
+let ylim = [];
+
+let svg = d3.select('body').append('svg')
+   .attr('width',  w)
+   .attr('height', h)
+
+let data = d3.range(500).map(x=>[x,Math.cos(x)])
+
+let xScale = d3.scaleLinear()
+	.domain([d3.min(data,d=>d[0]),d3.max(data,d=>d[0])])
+	.range([ 0, svg.attr('width')])
+
+let yScale = d3.scaleLinear()
+	.domain([d3.min(data,d=>d[1]), d3.max(data,d=>d[1])])
+	.range([ svg.attr('height'), 0])
+
+svg.selectAll('circle')
+   .data(data).enter()
+   .append('circle')
+   .attr('cx', d => d[0])
+   .attr('cy', d => d[1])
+   .attr('r',  5)
+
+</script>
+</body>
