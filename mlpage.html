@@ -1,0 +1,39 @@
+<style> 
+	h2{color:#cccccc;}
+	p{color:#ffffff;}
+	body{background-color:#222222;} </style>
+
+<h2> ml5.js test </h2>
+
+<p> <button onclick='next_image()'> New Image </button> </p>
+
+<img height='200px' id='image'> </img>
+<p id='printout'> </p>
+
+<script src="ml5.min.js"></script> <script>
+
+let image    = document.getElementById('image');
+let printout = document.getElementById('printout');
+
+const darknet      = ml5.imageClassifier('Darknet',      ()=>{});
+const darknet_tiny = ml5.imageClassifier('Darknet-tiny', ()=>{});
+const mobilenet    = ml5.imageClassifier('MobileNet',    ()=>{});
+
+let idx = 0;
+let images = ['images/bike.jpg', 	'images/bird.jpg', 		'images/cat.jpg', 
+              'images/chess.jpg', 	'images/cow.jpg', 		'images/fish.jpg', 
+              'images/pug.jpg',  	'images/statue.jpg', 		'images.storm.jpg', 
+              'images/tree.jpg',  	'images/waffles.jpg'];
+
+function next_image() {
+	idx++; if (idx > 10) {idx = 0;}
+	image.src = images[idx]; 	
+	printout.innerHTML = '';
+	darknet.classify(      image,(err,result) => { 
+		printout.innerHTML += 'Darknet:' + result[0].label + '<br/>';});
+	darknet_tiny.classify( image, (err, result) => { 	
+		printout.innerHTML += 'DarknetTiny:' + result[0].label + '<br/>'; });
+	mobilenet.classify(    image, (err, result) => {  
+		printout.innerHTML += 'MobileNet:' + result[0].label + '<br/>';});}
+
+</script>

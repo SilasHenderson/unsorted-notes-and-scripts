@@ -1,0 +1,15 @@
+<body> <script>
+
+let image = document.createElement('img');
+	document.body.append(image);
+
+let input = document.createElement('input');
+	document.body.append(input);
+	input.setAttribute('type', 'file');
+	input.onchange = (e) => {
+ 		let file = e.target.files[0];	
+ 		let reader = new FileReader();
+ 			reader.onload = (e) => { image.src = e.target.result;};
+			reader.readAsDataURL(file); }
+
+</script> </body>
