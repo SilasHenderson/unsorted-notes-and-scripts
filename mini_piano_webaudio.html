@@ -1,0 +1,67 @@
+<style>
+
+.piano div{ 
+
+    float:left; 
+    width:50px; 
+    height:100px;
+    border:solid 2px;
+
+    font-size:40px;
+    text-align:center;
+    vertical-align:middle;
+    line-height:100px;
+    user-select: none;
+}
+
+.piano div:hover{  background-color:#aaa; }
+.piano div:active{ background-color:#00f; }
+
+</style>
+
+<h2> 'Piano' </h2>
+<p> Press 'keys' to play notes </p>
+
+<div class='piano'> 
+    <div id='C'> C </div>
+    <div id='D'> D </div>
+    <div id='E'> E </div>
+    <div id='F'> F </div> 
+    <div id='G'> G </div>
+    <div id='A'> A </div>
+    <div id='B'> B </div>
+    <div id='C2'>C </div>
+</div>
+
+<script>
+
+let audioContext = new AudioContext(); 
+
+let notes = {
+    'C': 261, 
+    'D': 294, 
+    'E': 330, 
+    'F': 349, 
+    'G': 392, 
+    'A': 440, 
+    'B': 494,
+    'C2':523
+}
+
+let oscillator;
+
+for (let note in notes) {
+    document.getElementById(note).onmousedown = () => {
+        oscillator = audioContext.createOscillator();
+        oscillator.frequency.value = notes[note];
+        oscillator.connect(audioContext.destination);
+        oscillator.start();
+    }
+}
+   
+document.onmouseup = () => {
+   oscillator.stop();
+}
+
+</script>
+

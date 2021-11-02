@@ -1,0 +1,21 @@
+<script src="react.development.js"></script>
+<script src="react-dom.development.js"></script>
+
+<div id='info'> </div>
+<div id='root'> </div>
+<script>
+
+let el = React.createElement('h1', null, 'bananas')
+
+ReactDOM.render(el, root);
+
+print_entries(React)
+
+function print_entries(obj) {
+
+    for (let [key,val] of Object.entries(obj)) {
+      info.innerHTML += '<b>' + String(key) +'</b>: ' + String(val).substr(0,20) + '<br>';
+    }
+}
+
+</script>
