@@ -1,0 +1,16 @@
+<pre id='p'></pre>
+
+<script>
+let code = 
+`
+00 61 73 6d  ;; MAGIC  
+01 00 00 00  ;; VERSION
+`;
+let bytes = Uint8Array.from( code
+	.replace(/;;.*\n/g,'')
+	.trim()
+  .split(/[\s+\n+]+/g)
+  .map(x => Number('0x'+x))
+)
+p.innerHTML = new WebAssembly.Module( bytes);
+</script>
