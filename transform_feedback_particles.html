@@ -1,0 +1,182 @@
+<pre id='p'> </pre>
+
+<canvas id="canvas" width=300 height=300> </canvas>
+<style> canvas{ background-color:#111; }</style>
+
+<script>
+
+/*
+
+Transform feedback Test
+
+*/
+
+/* - - - Shader Codes - - - */
+
+let vertex_code = 
+
+`#version 300 es
+
+in vec2 pos, vel;
+in vec3 color;
+
+out vec2 pos_out, vel_out;
+out vec3 point_color;
+
+uniform vec2 source;
+
+void main() 
+{
+    float dt   = .01;
+    float G    = -20.0;
+    
+    float dx = pos.x - source.x;
+    float dy = pos.y - source.y;
+    float L  = sqrt(dx*dx + dy*dy) + .0001;
+
+    vec2 unit  = vec2(dx,dy)/L;
+    vec2 accel = G*unit/(L*L + 10.0); 
+
+    vel_out = vel + accel*dt;
+    pos_out = pos + vel_out*dt; 
+
+    point_color  = color;
+    gl_PointSize = 1.5; 
+    gl_Position  = vec4(pos, 0., 1.0);
+}`;
+
+let fragment_code = 
+
+`#version 300 es
+precision highp float;
+
+in vec3 point_color;
+out vec4 frag_color;
+
+void main() 
+{ 
+    frag_color = vec4(point_color, 1.);
+}`;
+
+/* - - - Make Shader program with Transform Feedback - - - */
+
+let gl = canvas.getContext("webgl2");      
+
+let vertex_shader   = gl.createShader(gl.VERTEX_SHADER); 
+let fragment_shader = gl.createShader(gl.FRAGMENT_SHADER);    
+let shader_program  = gl.createProgram();
+
+gl.shaderSource(vertex_shader,   vertex_code); 
+gl.shaderSource(fragment_shader, fragment_code); 
+    
+gl.compileShader(vertex_shader);
+gl.compileShader(fragment_shader);
+    
+gl.attachShader(shader_program, vertex_shader);  
+gl.attachShader(shader_program, fragment_shader);
+
+gl.transformFeedbackVaryings(
+    shader_program, 
+    ['pos_out', 'vel_out'], 
+    gl.SEPARATE_ATTRIBS)
+
+gl.linkProgram( shader_program);     
+gl.useProgram(  shader_program);
+
+let pos_attrib   = gl.getAttribLocation(shader_program, 'pos');  
+let vel_attrib   = gl.getAttribLocation(shader_program, 'vel');
+let color_attrib = gl.getAttribLocation(shader_program, 'color');
+
+let source_uniform = gl.getUniformLocation(shader_program, 'source');
+
+gl.enableVertexAttribArray( pos_attrib);
+gl.enableVertexAttribArray( vel_attrib);
+gl.enableVertexAttribArray( color_attrib);
+
+let transform = gl.createTransformFeedback();
+gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK, transform);
+
+/* - - - Load Initial Data to Buffers - - - */
+
+let num_points = 100000;
+
+// Make Array Data
+let pos_data   = new Float32Array(2*num_points);
+let vel_data   = new Float32Array(2*num_points);
+let color_data = new Float32Array(3*num_points);
+
+for (let pt = 0; pt < num_points; pt++){
+    
+    color_data[3*pt    ] = Math.random();
+    color_data[3*pt + 1] = Math.random();
+    color_data[3*pt + 2] = Math.random();
+
+    pos_data[2*pt    ] = pt/num_points*Math.cos(pt/500)/2;
+    pos_data[2*pt + 1] = pt/num_points*Math.sin(pt/500)/2;
+    
+    vel_data[2*pt    ] = 0;
+    vel_data[2*pt + 1] = 0;
+}
+
+// Make Buffers
+let pos_buf   = [gl.createBuffer(), gl.createBuffer()];
+let vel_buf   = [gl.createBuffer(), gl.createBuffer()];
+let color_buf = gl.createBuffer();
+
+// Load Array Data to Buffers
+for (let i of [0,1]) {
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, pos_buf[i]);
+    gl.bufferData(gl.ARRAY_BUFFER, pos_data, gl.STATIC_DRAW); 
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, vel_buf[i]);
+    gl.bufferData(gl.ARRAY_BUFFER, vel_data, gl.STATIC_DRAW); 
+}
+
+gl.bindBuffer(gl.ARRAY_BUFFER, color_buf);
+gl.bufferData(gl.ARRAY_BUFFER, color_data, gl.STATIC_DRAW); 
+gl.vertexAttribPointer( color_attrib, 3, gl.FLOAT, false, 4*3, 0);
+
+/* - - - Mouse - - - */
+
+let mouse_pos = new Float32Array(2);
+
+canvas.onmousemove = (e) => {
+    
+    mouse_pos[0] =-1+2*(e.offsetX/canvas.width);
+    mouse_pos[1] = 1-2*(e.offsetY/canvas.height);
+    
+}
+
+gl.uniform2fv( source_uniform, mouse_pos);
+
+/* - - - Main Loop - - - */
+
+let read_index = 0;
+
+(function loop() { 
+    p.innerHTML = mouse_pos;
+    gl.uniform2fv(source_uniform, mouse_pos);
+    
+    // Set Input Buffers
+    gl.bindBuffer(gl.ARRAY_BUFFER, pos_buf[read_index]);
+    gl.vertexAttribPointer( pos_attrib, 2, gl.FLOAT, false, 4*2, 0);
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, vel_buf[read_index]);
+    gl.vertexAttribPointer( vel_attrib, 2, gl.FLOAT, false, 4*2, 0);
+    
+    // Set Output Buffers
+    gl.bindBufferBase(gl.TRANSFORM_FEEDBACK_BUFFER, 0, pos_buf[1-read_index]);
+    gl.bindBufferBase(gl.TRANSFORM_FEEDBACK_BUFFER, 1, vel_buf[1-read_index]); 
+
+    // Tranform, Draw
+    gl.beginTransformFeedback(gl.POINTS);
+    gl.drawArrays(gl.POINTS, 0, pos_data.length/2);
+    gl.endTransformFeedback();
+
+    // Swap Read Index, Repeat
+    read_index = 1 - read_index;
+    requestAnimationFrame(loop); 
+})()
+
+</script>

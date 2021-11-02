@@ -1,0 +1,603 @@
+<!doctype html>
+
+<!-- Square Planar FEA Gui (doesn't work yet) -->
+
+<!-- - - - - - - - - - - - Style - - - - - - - - - - - - -->
+<style>
+	body{ 
+		background-color:#000000; }
+
+	.btn{			
+		position:fixed;	
+		top:0%; width:10%; height:5%; 
+		color:#dddddd;
+		background-color:#000000;
+		margin:0px; 
+		border:none; 
+		text-decoration:none; 
+		font-size:12px;
+		font-family:sans-serif; 
+		font-weight:bolder; }
+
+	.btn:hover { background-color:#335533; }
+	.btn:active{ background-color:#333355; } 
+
+	.info { 
+		position:fixed; 
+		left:50%; top:5%; height:95%; width:50%;
+	 	color:#ffffff;
+	 	background-color:#222222; 
+	 	padding:10px; 
+	 	font-size:20px; 
+	 	font-family:monospace; }
+
+	 .canvas {
+	 	position:fixed; 
+	 	left:0%; top:5%; height:95%; width:50%;
+	 	background-color:#cccccc; }
+</style>
+
+<!-- - - - - - - - - - - - Document - - - - - - - - - - - - -->
+
+<button id='btn_force' class='btn' style='left:0%;'>  Force    </button>
+<button id='btn_fixed' class='btn' style='left:10%;'> Fixed Pt </button>
+<button id='btn_elem'  class='btn' style='left:20%;'> Element  </button>
+<button id='btn_solve' class='btn' style='left:30%;'> Solve    </button>
+
+<canvas id='canvas' class='canvas'>	</canvas> 
+
+<div id='div' class='info'> </div>
+
+<script>
+
+/* ------------------------ Init ------------------------ */
+
+// Document Elements
+
+let btn_force = document.getElementById('btn_force');
+let btn_fixed = document.getElementById('btn_fixed');
+let btn_elem  = document.getElementById('btn_elem');
+let btn_solve = document.getElementById('btn_solve');
+let div       = document.getElementById('div');
+let canvas    = document.getElementById('canvas');
+
+// Drawing Context ('canvas 2d')
+
+let ctx = canvas.getContext('2d');
+
+// Gui Variables
+
+let mouse_over      = 0;
+let mouse_down      = 0;
+let mouse_fresh     = 1;
+let mouse_pos       = [0,0];
+
+let gui_mode        = 'add_elements';
+
+let canvas_pos      = []; update_canvas_pos();
+let ax_pos          = [.05,.05,.9,.9];  
+let ax_lims         = [ 0, 0, 10, 10];		
+
+let grid_pos        = [0,0];
+let grid_anchor_pos = [0,0];
+let grid_anchor_on  =  0;
+
+// Structure/Mesh Variables
+
+let node_coords = [];
+let el_nodes    = [];
+let fixed_nodes = [];
+let fixed_pts   = [];
+let forces      = [];
+
+let el_areas = new Float32Array(10000).fill(1);
+let u_global = new Float32Array(1000).fill(0);
+
+/* ---------------- Mouse and Button Functions ------------------- */
+
+// Buttons
+
+btn_fixed.onmousedown = () => { gui_mode = 'add_fixed_pts'; }
+btn_elem.onmousedown  = () => { gui_mode = 'add_elements';  }
+btn_force.onmousedown = () => { gui_mode = 'add_forces';    }
+btn_solve.onmousedown = () => { solve(); draw_elements(); }
+
+// Mouse up, down, move
+
+document.onmousedown = () => { 
+	grid_anchor_pos[0] = grid_pos[0];
+	grid_anchor_pos[1] = grid_pos[1];
+	mouse_down         = 1; }
+
+document.onmouseup = () => { 
+	mouse_down  = 0; 
+	mouse_fresh = 1; }
+
+document.onmousemove = (e) => {
+	let c_n_x =     (e.clientX - canvas_pos[0])/canvas_pos[2];	
+	let c_n_y = 1 - (e.clientY - canvas_pos[1])/canvas_pos[3]; 
+	let a_n_x = (c_n_x - ax_pos[0])/ax_pos[2];
+	let a_n_y = (c_n_y - ax_pos[1])/ax_pos[3];
+	
+	mouse_pos[0] = ax_lims[0] + ax_lims[2]*a_n_x;
+	mouse_pos[1] = ax_lims[1] + ax_lims[3]*a_n_y; 
+
+	if (gui_mode == 'add_elements') {
+		grid_pos[0]  = Math.floor(mouse_pos[0]);
+		grid_pos[1]  = Math.floor(mouse_pos[1]); 
+	}
+	else {
+		grid_pos[0]  = Math.floor(mouse_pos[0] + .5);
+		grid_pos[1]  = Math.floor(mouse_pos[1] + .5);
+	}
+	
+	if (mouse_pos[0] < ax_lims[0] || 
+	    mouse_pos[0] > ax_lims[0] + ax_lims[2] ||
+	    mouse_pos[1] < ax_lims[1] || 
+	    mouse_pos[1] > ax_lims[1] + ax_lims[3]) {
+
+		mouse_over = 0;
+		mouse_down = 0; 
+	}
+	else mouse_over = 1; 
+}
+
+/* ------------------------- Main Loop ------------------------ */
+
+(function main_loop() {
+
+	ctx.clearRect( 0,0, canvas_pos[2], canvas_pos[3]);
+
+	gui_mode_add_elements_fn();
+	gui_mode_add_fixed_pts_fn();
+	gui_mode_add_forces_fn();
+
+	draw_axes();
+	draw_elements();
+	draw_forces();
+	draw_fixed_pts();
+	draw_labels();
+	draw_pointer();
+
+	display_data();
+
+	requestAnimationFrame(main_loop); })()
+
+/*-------------------- Loop Mini Functions -------------------*/
+
+function gui_mode_add_elements_fn(){
+	if (gui_mode == 'add_elements'&& mouse_down==1 && mouse_over==1) {
+		check_el_add_if_new( grid_pos[0], grid_pos[1], 1, 1); 
+	} 
+}
+
+function gui_mode_add_fixed_pts_fn() {
+
+	if (gui_mode   == 'add_fixed_pts' && mouse_down == 1 && mouse_over == 1) {
+		check_fixed_add_if_new( grid_pos[0], grid_pos[1]); 
+	} 
+}
+
+function gui_mode_add_forces_fn() {
+
+	if (gui_mode   == 'add_forces' && mouse_down == 1 && mouse_over == 1) {
+
+		let f = [
+			mouse_pos[0] - grid_anchor_pos[0], 
+			mouse_pos[1] - grid_anchor_pos[1]
+		];
+
+		let f_length = f[0]*f[0] + f[1]*f[1];
+		if (f_length > .2) {
+			check_force_add_if_on_node( grid_anchor_pos, f); 
+		} 
+	} 
+}
+
+function display_data() {
+
+	div.innerHTML = 
+
+	`<h3> Square Element Gui Test </h3>
+	 mode: ${gui_mode} <br> <br>
+	 canvas x: ${canvas_x(mouse_pos[0]).toFixed()} <br>
+     canvas y: ${canvas_y(mouse_pos[1]).toFixed()} <br> <br>
+
+	 mouse x: ${mouse_pos[0].toFixed(2)} <br>
+	 mouse y: ${mouse_pos[1].toFixed(2)} <br> <br> 
+	 grid x: ${ grid_pos[0] } <br> 
+     grid y: ${ grid_pos[1] } <br> <br> 
+
+     anchor x: ${grid_anchor_pos[0] } <br>
+     anchor y: ${grid_anchor_pos[1] } <br> <br>
+
+     num nodes: ${node_coords.length/2} <br>
+	 num elems: ${el_nodes.length/4} <br>
+	 num fixed: ${fixed_pts.length/2} <br>
+	 num forces ${forces.length/3}  <br>`; }
+	
+/*------------------ User Interface Utility Functions ------------------*/
+
+function check_el_add_if_new(x,y,w,h) {
+
+	let el_is_new = true;
+	for (let i = 0; i < el_nodes.length/4; i++) {
+		let x0 = node_coords[2*el_nodes[4*i]  ]
+		let y0 = node_coords[2*el_nodes[4*i]+1]
+		if (y == y0 && x == x0) el_is_new = false; 
+	}
+
+	if (el_is_new) {
+
+		let X = [x, x+w, x+w, x  ];
+		let Y = [y,	y, 	 y+h, y+h];
+
+		for (let q = 0; q < 4; q++) {
+
+			let is_new = 1;
+			let idx    = 0;
+
+			for (let i = 0; i < node_coords.length/2; i++) {
+				
+				let dx = Math.abs(node_coords[2*i]   - X[q])
+				let dy = Math.abs(node_coords[2*i+1] - Y[q])
+
+				if (dx < .01 && dy < .01) {	
+					is_new = false;
+					idx    = i; 
+				} 
+			}
+
+			if (is_new == 1) { 
+				el_nodes.push(node_coords.length/2);
+				node_coords.push(X[q], Y[q]); 
+			}
+			else el_nodes.push(idx); 
+		} 
+	} 
+}
+
+function check_fixed_add_if_new(x,y) {
+
+	let fixed_pt_is_new = 1;
+	for (let i = 0; i < fixed_pts.length/2; i++) {
+		if (x == fixed_pts[2*i] && y == fixed_pts[2*i + 1]) fixed_pt_is_new = 0;
+	}
+	if (fixed_pt_is_new == 1) fixed_pts.push(x,y); 
+}
+
+function check_force_add_if_on_node(f_pos, f) {
+
+	let node = -1;
+	for (let n = 0; n < node_coords.length/2; n++) {
+		if (f_pos[0] == node_coords[2*n] && 
+			f_pos[1] == node_coords[2*n + 1]) node = n;
+	}
+
+	let f_idx = -1;
+	if (node != -1) {
+		for (let f = 0; f < forces.length/3; f++) {
+			if (forces[3*f] == node) f_idx = f; } }
+
+	if (node > -1 && f_idx == -1) forces.push(node, f[0], f[1]);
+
+	if (node > -1 && f_idx > -1) {
+		forces[3*f_idx    ] = node;
+		forces[3*f_idx + 1] = f[0];
+		forces[3*f_idx + 2] = f[1]; 
+	} 
+}
+
+/* --------------------- Solver -------------------------- */
+
+function solve() {
+
+	let k0_el = find_k0_el();
+	let p = 1;
+		
+	// Find fixed nodes from fixed points	
+
+	fixed_nodes = [];
+	for (let p = 0; p < fixed_pts.length/2; p++) {
+		let node = -1;
+		for (let n = 0; n < node_coords.length/2; n++) {
+			if (fixed_pts[2*fp  ] == node_coords[2*n  ] && 
+				fixed_pts[2*fp+1] == node_coords[2*n+1]) node = n; }
+
+		if (node != -1) fixed_nodes.push(node); }
+
+	// List non-fixed dof's in 'dof_free'
+
+	let dof_free = []; 								
+	for (let n = 0; n < node_coords.length/2; n++) {
+		for (let f = 0; f < fixed_nodes.length; f++) {
+			if (f == n) {
+				dof_free.push(2*n, 2*n+1); } } }
+	dof_free = new Float32Array(dof_free);
+
+	// Store element degrees of freedom
+
+	let el_dof = [];
+	for (let i = 0; i < el_nodes.length; i++) {
+		el_dof.push(2*el_nodes[i]    );
+		el_dof.push(2*el_nodes[i] + 1);}
+	el_dof = new Float32Array(el_dof);
+
+	// DOF = Max degrees of freedom	
+	// dof = Non-Fixed degrees of freedom
+
+	let DOF = node_coords.length;
+	let dof = dof_free.length;
+	
+	// Global 'k' Matrix
+
+	let k_global = new Float32Array(DOF*DOF).fill(0); 
+
+	for (let el = 0; el < el_nodes.length/4; el++) { 
+		let xp = el_areas[el];
+
+		for (let xi = 0; xi < 8; xi++) {
+			for (let yi = 0; yi < 8; yi++){
+
+				let X = el_dof[8*el + xi];
+				let Y = el_dof[8*el + yi];
+				k_global[DOF*Y+X] += xp*k0_el[8*yi+xi];}}}; 
+
+	// Reduced 'k' Matrix
+
+	let k_reduced = new Float32Array(dof*dof);
+	for (let i = 0; i < dof; i++) {
+		for (let j = 0; j < dof; j++) {	
+			let I = dof_free[i];
+			let J = dof_free[j];
+			k_reduced[dof*i + j] = k_global[DOF*I + J];
+		}
+	}
+
+	// Force vector (global)
+
+	let f_global = new Float32Array(DOF);
+	for (let f = 0; f < forces.length/3; f++) {
+		f_global[2*forces[3*f]  ] = forces[3*f+1];
+		f_global[2*forces[3*f]+1] = forces[3*f+2];}
+
+	// Set Buffer
+
+	let A = new Float32Array(dof*dof).fill(0);      
+	let b = new Float32Array(dof).fill(0);		
+	for (let i = 0; i < dof*dof; i++) { A[i] = k_reduced[i];} 
+	for (let i = 0; i < dof; i++)     { b[i] = f_global[dof_free[i]];}
+
+	// Loop over Pivots
+
+	for (let pivot = 0; pivot < dof; pivot++) {
+
+		let p_val = 1/A[dof*pivot+pivot];
+		b[pivot] *= p_val;                                 
+		
+		// Normalize Row
+		A[dof*pivot+pivot] = 1;
+		for (let col = pivot+1; col < dof; col++) {		
+			A[dof*pivot + col]*= p_val;}	
+
+		for (let row = pivot+1; row < dof; row++) {          
+			let elim_val = A[dof*row+pivot];
+			if (elim_val != 0) {			 
+				b[row] -= b[pivot]*elim_val;	 
+				for (col = pivot+1; col < dof; col++) { 	
+					A[dof*row+col] -= A[dof*pivot+col]*elim_val;}}}}
+
+	for (let pivot = dof-1; pivot > 0; pivot--) {	
+		for (let row = pivot-1; row >= 0; row--) {
+			b[row] -= b[pivot]*A[dof*row+pivot];}}
+ 	
+ 	u_global = new Float32Array(DOF).fill(0);	
+ 	for (let i = 0; i < dof; i++) {	
+ 		u_global[dof_free[i]] = b[i];}}
+
+function find_k0_el() {
+
+	let E  = 100;
+	let nu =  .3;     
+	let	k1 = ( 1/2 -   nu/6)*E/(1-nu*nu);
+	let k2 = ( 1/8 +   nu/8)*E/(1-nu*nu);
+	let	k3 = (-1/4 -  nu/12)*E/(1-nu*nu);
+	let k4 = (-1/8 + 3*nu/8)*E/(1-nu*nu);
+	let	k5 = (-1/4 +  nu/12)*E/(1-nu*nu);
+	let k6 = (-1/8 -   nu/8)*E/(1-nu*nu);
+	let	k7 = (         nu/6)*E/(1-nu*nu);
+	let k8 = ( 1/8 - 3*nu/8)*E/(1-nu*nu);
+	
+	return new Float32Array([
+		k1, k2, k3, k4, k5, k6, k7, k8,
+        k2, k1, k8, k7, k6, k5, k4, k3,
+       	k3, k8, k1, k6, k7, k4, k5, k2,
+       	k4, k7, k6, k1, k8, k3, k2, k5,
+        k5, k6, k7, k8, k1, k2, k3, k4,
+        k6, k5, k4, k3, k2, k1, k8, k7,
+        k7, k4, k5, k2, k3, k8, k1, k6,
+        k8, k3, k2, k5, k4, k7, k6, k1]);
+}
+
+/*------------------ Drawing Functions (low-level) ---------------------*/
+
+function line(x_data, y_data, width=3, color='#550000') {
+	
+	ctx.lineWidth   = width;
+	ctx.strokeStyle = color;
+
+	ctx.beginPath();
+	ctx.moveTo(
+		canvas_x(x_data[0]), 
+		canvas_y(y_data[0]));
+	
+	for (let i = 1; i < x_data.length; i++) {
+		ctx.lineTo( 
+			canvas_x(x_data[i]), 
+			canvas_y(y_data[i])); }
+	
+	ctx.stroke();}
+
+function box(x, y, w, h, color = '#000044') {
+
+	ctx.fillStyle = color;
+
+	ctx.fillRect(
+		canvas_x(x),
+		canvas_y(y),	
+	  	canvas_w(w),
+	  - canvas_h(h) ); }
+	
+function rect(x, y, w, h, color = '#000044') {
+
+	ctx.strokeStyle = color;
+	ctx.beginPath();
+
+	ctx.strokeRect(
+		canvas_x(x),
+		canvas_y(y),	
+	  	canvas_w(w),
+	  - canvas_h(h)); }
+
+function circle(x,y,radius, color='#550000') {
+
+	ctx.lineWidth   = 2;
+	ctx.strokeStyle = color;
+
+	ctx.beginPath();
+	ctx.arc(
+		canvas_x(x),
+		canvas_y(y),
+		canvas_w(radius), 0, 6.4);
+	
+	ctx.stroke();}
+
+function update_canvas_pos() {
+
+	canvas_pos[0] = canvas.getBoundingClientRect().x;
+	canvas_pos[1] = canvas.getBoundingClientRect().y;
+	canvas_pos[2] = canvas.getBoundingClientRect().width;
+	canvas_pos[3] = canvas.getBoundingClientRect().height;
+
+	canvas.width  = canvas_pos[2]; 
+	canvas.height = canvas_pos[3];
+}
+
+function canvas_x(x) {
+	return canvas.width*( 
+		ax_pos[0] + (x-ax_lims[0])/ax_lims[2]*ax_pos[2]); }
+
+function canvas_y(y) {
+	return canvas.height*( 
+		1 - ax_pos[1] - 
+			ax_pos[3]*(y-ax_lims[1])/ax_lims[3] ); }
+
+function canvas_w(w) { return w/ax_lims[2]*canvas.width*ax_pos[2];  }
+function canvas_h(h) { return h/ax_lims[3]*canvas.height*ax_pos[3]; }
+
+// ------------- Drawing Functions ( High level ) ---------------
+
+function draw_axes() {
+
+	// Axes background and border 	
+
+	ctx.lineWidth = 1;
+ 	box( ax_lims[0], ax_lims[1], ax_lims[2], ax_lims[3], '#eeeeee');
+ 	rect(ax_lims[0], ax_lims[1], ax_lims[2], ax_lims[3], '#000000');
+ 	
+ 	// X labels
+
+ 	ctx.font         = '16px mono';
+ 	ctx.fillStyle    = '#000000';
+	ctx.textBaseline = 'top';
+	ctx.textAlign    = 'center';
+	for (let x = 0; x < 11; x++) {
+		ctx.fillText(x, canvas_x(x), canvas_y(0) + 2);}
+	
+	// Y labels
+
+	ctx.textBaseline = 'middle';
+	ctx.textAlign    = 'right';
+	for (let y = 1; y < 11; y++) {
+		ctx.fillText(y, canvas_x(0)-2, canvas_y(y)); } }
+
+function draw_forces() {
+
+	for (let i = 0; i < forces.length/3; i++) {
+		let x = node_coords[2*forces[3*i]  ];
+		let y = node_coords[2*forces[3*i]+1];
+
+		line([x, x + forces[3*i+1]], 
+			 [y, y + forces[3*i+2]]); } }
+
+function draw_elements() {
+
+	ctx.fillStyle = '#222222';
+	for (let el = 0; el < el_nodes.length/4; el++) {
+		ctx.beginPath();
+
+		for (let i = 0; i < 4; i++){
+			let n = el_nodes[4*el + i];
+			let x = canvas_x(node_coords[2*n]  +u_global[2*n]);
+			let y = canvas_y(node_coords[2*n+1]+u_global[2*n+1]);
+			
+			if (i==0) ctx.moveTo( x, y);
+			else      ctx.lineTo( x, y); }
+
+		ctx.fill(); } }
+		 	
+function draw_fixed_pts() {
+
+	for (let i = 0; i < fixed_pts.length/2; i++) {
+
+		let x = fixed_pts[2*i]   - .2;
+		let y = fixed_pts[2*i+1] - .2;
+		box( x, y, .4, .4, '#008800'); } }
+
+function draw_labels() {
+
+	// Element Labels
+
+	ctx.textAlign    = 'center';
+	ctx.textBaseline = 'middle';
+	ctx.font         = '16px arial bold';
+	ctx.fillStyle    = '#ffffff';
+
+	for (let e = 0; e < el_nodes.length/4; e++) {
+		let ex = node_coords[2*el_nodes[4*e]  ] + .5;
+		let ey = node_coords[2*el_nodes[4*e]+1] + .5;
+		ctx.fillText(e, canvas_x(ex), canvas_y(ey)); }
+
+	// Node Labels
+
+	ctx.font = '10px arial bold';
+	ctx.fillStyle = '#00aaff';
+
+	for (let n = 0; n < node_coords.length/2; n++) {
+		let nx = node_coords[2*n];
+		let ny = node_coords[2*n+1];
+		ctx.fillText(n, canvas_x(nx), canvas_y(ny)); } }
+
+function draw_pointer() { 
+
+	if (mouse_over == 1) {
+		ctx.globalAlpha = .4;
+
+		if (gui_mode == 'add_elements')
+			box(grid_pos[0], grid_pos[1], 1, 1, '#008800');
+
+		if (gui_mode == 'add_fixed_pts')  
+			rect(grid_pos[0]-.2, grid_pos[1]-.2, .4, .4, '#000000');
+		
+		if (gui_mode == 'add_forces') {
+			ctx.globalAlpha = 1;
+
+			if (mouse_down == 0) { circle(grid_pos[0], grid_pos[1], .1);}
+			else {
+				circle( grid_anchor_pos[0], grid_anchor_pos[1], .1);
+				line( [ grid_anchor_pos[0], mouse_pos[0] ], 
+					  [ grid_anchor_pos[1], mouse_pos[1] ]); } } }
+
+	ctx.globalAlpha = 1; }	
+
+</script>

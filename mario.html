@@ -1,0 +1,212 @@
+<canvas id='canvas' width=500 height=240></canvas>
+
+<script>
+
+let gl = canvas.getContext('webgl2',{
+    premultipliedAlpha: false,
+    preserveDrawingBuffer:true
+});
+
+gl.enable(gl.DEPTH_TEST);
+
+gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+
+let DrawBackground = (() => {
+
+    let prog = Program(
+        `
+        in vec2 pos;
+        void main()
+        {
+            gl_Position = vec4(pos, 0., 1.);
+        }`, 
+        `
+        uniform sampler2D level;
+        uniform int left;
+        out vec4 color;
+        void main()
+        {
+            int x = int(gl_FragCoord.x) + left;
+            int y = int(gl_FragCoord.y);
+            color = texelFetch(level,ivec2(x,y),0);
+        }`
+    );
+
+    let buf = Buffer(CornerVertices());
+    let level = Texture('https://mario.wiki.gallery/images/3/38/SMB_NES_World_1-1_Map.png');
+
+    return (left) => {
+
+       gl.useProgram(prog.program);
+       gl.bindBuffer(gl.ARRAY_BUFFER, buf, gl.STATIC_DRAW);
+       gl.vertexAttribPointer(prog.pos,2,gl.FLOAT,false,0,0);
+       gl.uniform1i(prog.left, left);
+       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    }
+})()
+
+let DrawMario = (() => {
+
+    let prog = Program(
+        `
+        in vec2 uv;
+        out vec2 UV;
+        uniform vec2 pos;
+ 
+        void main()
+        {        
+            UV = uv;
+            float px = 2.0/240.0;
+            vec2 mario_size = vec2(16.0, 32.0);
+            gl_Position = vec4(-1.0+px*(pos+uv*mario_size), -.9,1.);
+        }`, 
+        `
+        uniform sampler2D mario;
+        in vec2 UV;
+
+        out vec4 color;
+        void main()
+        {
+            color = texture(mario, UV);
+
+             
+        }`
+    );
+
+    let buf = Buffer(UvVertices());
+
+    let mario = Texture('https://mario.wiki.gallery/images/c/cf/SMB_Super_Mario_Sprite.png');
+   
+    return (mario_pos) => {
+
+       gl.useProgram(prog.program);
+       gl.bindBuffer(gl.ARRAY_BUFFER, buf, gl.STATIC_DRAW);
+       gl.vertexAttribPointer(prog.uv,2,gl.FLOAT,false,0,0);
+       gl.uniform2fv(prog.pos, new Float32Array(mario_pos));
+       gl.uniform1i(prog.mario, mario.unit);
+       
+       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    }
+})()
+
+let left = 0;
+let mario_pos = [20,50];
+let mario_vel = [0,0];
+
+(function loop() {
+
+    mario_pos[0] += mario_vel[0];
+    mario_pos[1] += mario_vel[1];
+
+    left = Math.min(left, mario_pos[0] - 20);
+    // left = Math.max(left, canvas.width - mario_pos[0] - 20);
+
+    gl.clear(gl.DEPTH_BUFFER_BIT);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    DrawBackground(left);
+    DrawMario(mario_pos)
+    requestAnimationFrame(loop);
+})();
+
+document.onkeydown = (e) => {
+    if (e.key == 'ArrowLeft')  mario_vel[0] = -1;
+    if (e.key == 'ArrowRight') mario_vel[0] =  1;
+}
+document.onkeyup = () => mario_vel[0] = 0;
+
+
+// let mario = Texture('https://mario.wiki.gallery/images/c/cf/SMB_Super_Mario_Sprite.png');
+
+// let weird_mario = Texture('https://mario.wiki.gallery/images/8/88/SMM-SMB-WeirdMario-Jump.png');
+
+/* - - - Functions - - - */
+
+function CornerVertices(){
+    return new Float32Array([-1,-1, 1,-1,-1,1, 1,1]);
+}
+function UvVertices(){
+    return new Float32Array([0,0, 1,0, 0,1, 1,1]);
+}
+
+function Buffer(data,attrib=null,size=null,type=gl.FLOAT){
+
+  let buffer = gl.createBuffer();
+
+  gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+  gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
+
+  if (attrib != null) {
+        gl.vertexAttribPointer(attrib,size,type,false,0,0);
+  }
+  return buffer;
+}
+
+function Program(vertex_code, fragment_code) {
+
+    // Returns program and attrib/uniform locations
+
+    let prog = { program:gl.createProgram()};
+    let vertex_shader   = gl.createShader(gl.VERTEX_SHADER);    
+    let fragment_shader = gl.createShader(gl.FRAGMENT_SHADER);
+
+    vertex_code   = "#version 300 es\n precision highp float;\n" + vertex_code;
+    fragment_code = "#version 300 es\n precision highp float;\n" + fragment_code;
+
+    gl.shaderSource( fragment_shader, fragment_code);
+    gl.shaderSource( vertex_shader,   vertex_code);
+    gl.compileShader(vertex_shader);     
+    gl.compileShader(fragment_shader);  
+
+    gl.attachShader( prog.program, vertex_shader);
+    gl.attachShader( prog.program, fragment_shader);
+    gl.linkProgram(  prog.program); 
+    gl.useProgram(   prog.program);  
+
+    let attrib_count = gl.getProgramParameter(prog.program, gl.ACTIVE_ATTRIBUTES); 
+    for (let i= 0; i < attrib_count; i++) {
+        let attrib_name     = gl.getActiveAttrib(  prog.program, i).name;   
+        let attrib_location = gl.getAttribLocation(prog.program, attrib_name);
+        gl.enableVertexAttribArray(attrib_location);
+        prog[attrib_name] = attrib_location;  
+    }
+    let uniform_count = gl.getProgramParameter( prog.program, gl.ACTIVE_UNIFORMS);
+    for (let i = 0; i < uniform_count; i++) {  
+        let uniform_name     = gl.getActiveUniform(  prog.program, i).name;
+        let uniform_location = gl.getUniformLocation(prog.program, uniform_name);
+        prog[uniform_name] = uniform_location;
+    }
+    for (let i in prog) console.log(i, prog[i]);
+    return prog;
+}
+
+function Texture(image_url, sampler = false) {
+
+    if (typeof Texture.next != 'number') Texture.next = 0;
+    else Texture.next++;
+
+    console.log('texture.next', Texture.next)
+    let tex = {
+        texture: gl.createTexture(), 
+        size:[1,1,1],
+        unit: Texture.next
+    }
+
+    let image = new Image();
+    image.src = image_url;
+    image.crossOrigin = "Anonymous";
+
+    image.onload = () => {
+        tex.size = [image.width, image.height, 4];
+        gl.activeTexture( gl.TEXTURE0 +  tex.unit);
+        gl.bindTexture(   gl.TEXTURE_2D, tex.texture);     
+        gl.pixelStorei(   gl.UNPACK_FLIP_Y_WEBGL, true);
+        gl.texImage2D(gl.TEXTURE_2D,0, gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,image);
+        gl.generateMipmap(gl.TEXTURE_2D);
+        console.log('made tex object:', Object.entries(tex));
+    } 
+
+    if (sampler) gl.uniform1i(sampler, tex.unit);
+
+    return tex;
+}
+</script>

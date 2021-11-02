@@ -1,0 +1,92 @@
+<script src= "http://www.visual-math.com/scripts/lib/libwabt.js"></script>
+
+
+<script>
+
+let wat = 
+`
+(module 
+(memory $m (export "mem") 1)
+   
+(func $sparse_mul_mapped
+  
+    (param $size_idx i32)   
+    (param $x_idx_idx i32)
+    (param $a_idx i32)    
+    (param $b_idx i32)    
+   
+    (local $row_count i32)     
+    (local $item_count i32)
+    (local $b f32)         
+    
+    local.get $size_idx  
+    i32.load           
+    local.set $row_count  
+  
+    local.get $size_idx i32.const 4 i32.add
+    local.tee $size_idx
+    i32.load
+    local.set $item_count
+  
+    loop
+      
+        local.get $item_count i32.const 1 i32.sub
+        local.tee $item_count
+        i32.eqz
+        if
+            local.get $row_count i32.const 1 i32.sub
+            local.tee $row_count
+            i32.eqz
+            br_if 1
+  
+            local.get $size_idx i32.const 4 i32.add
+            local.tee $size_idx
+            local.set $item_count
+  
+            local.get $b_idx i32.const 4 i32.add
+            local.tee $b_idx 
+            local.get $b
+            f32.store   
+            f32.const 0
+            local.set $b
+        end
+    
+        local.get $x_idx_idx i32.const 4 i32.add
+        local.tee $x_idx_idx 
+        i32.load 
+        f32.load
+        
+        local.get $a_idx i32.const 4 i32.add
+        local.tee $a_idx
+        f32.load
+            
+        f32.mul
+        local.get $b
+        f32.add
+        local.set $b
+    end
+))`
+
+let fish = {
+
+
+}
+
+let sparse = {
+
+    size_idx: 0, 
+    a_idx: 0,
+    x_idx_idx: 0,
+
+}
+
+let bytes = WabtModule()
+    .parseWat(' ', wat, 'mutable_globals','simd','threads','multi_value')
+    .toBinary({}).buffer;
+
+let mod  = new WebAssembly.Module( bytes);
+let inst = new WebAssembly.Instance(mod, {});
+       
+document.write(inst.exports.mem.buffer)
+
+</script>

@@ -1,0 +1,121 @@
+<style>
+button{ font-size:18px; }
+pre {font-size:18px; background-color:#eeeeee;}
+</style>
+
+<h1> Wasm Main </h1>
+<button id='btn'> Run </button>
+
+<h4> Code </h4>
+<pre id='code' spellcheck=false contenteditable=true>
+const 2
+const 1
+mul
+call $print	
+</pre>
+
+<h4> Out </h4>
+<pre id='out'> </pre>
+
+<script>
+
+btn.onclick = () => {
+
+	WasmVoidMain(code.textContent, out);
+}
+
+/* ---------------------------------------------------------- */
+
+function WasmVoidMain(instructions, out_div) { 
+
+	let module_template_bytes = [    
+
+		0x00, 0x61, 0x73, 0x6d,  // "this file is wasm
+		0x01, 0x00, 0x00, 0x00,  // ... version 1"
+                  
+		0x01,  					 // ~ Types Section ~
+		0x08, 0x02, 	 	     // is 8 bytes, 2 types
+		0x60, 0x01, 0x7f, 0x00,  // - type[0] is (1 i32 in, 0 out)
+		0x60, 0x00, 0x00,        // - type[1] is (0 in, 0 out)
+	          
+		0x02,  					 // ~ Imports Section ~
+		0x08, 0x01,              // is 8 bytes, 1 import
+		0x02, 0x6a, 0x73,        // - import[0] module name is 2 byte 'js', 
+		0x01, 0x70,              // - import[0] field  name is 1 byte 'p'
+		0x00, 0x00,              // - import[0] is function with sig idx 0
+	
+		0x03,  					 // ~ Functions Section ~ 
+		0x02, 0x01,         	 // is 2 bytes, 1 function     
+		0x01,					 // - func[1] has signature type[1]
+	            
+		0x08,                    // ~ Start Section !
+		0x01, 0x01 			     // is 1 byte, calls func[1]
+                             	 // !! Code Section !! (EMPTY)
+	]
+
+	let OpCodes = {
+	
+		'$print':  0x00,  //  custom
+
+		'nop':    0x01,  //  No Operation
+		'block':  0x02,  //  Block with label index at end: br(labelidx)
+		'loop':   0x03,  //  Block with label index at start
+		'if':     0x04,  //  If statement --> unlabeled block
+		'else':   0x05,  //  Mark 'else' block of if
+		'end':    0x0b,  //  End a block, loop, if, or function
+		'br':     0x0c,  //  Branch to a label
+		'br_if':  0x0d,  //  Conditionally branch to a label
+		'return': 0x0f,  //  Return 0 or more values from this fn
+		'call':   0x10,  //  Call a func 
+
+		'get':    0x20,  //  local.get
+		'set':    0x21,  //  local.set
+		'tee':    0x22,  //  local.tee
+
+		'load':   0x28,  //  i32.load
+		'store':  0x36,  //  i32.store
+	
+		'const':  0x41,  //  i32.const
+		'eqz':    0x45,  //  i32.eqz
+		'eq':     0x46,  //  i32.eq
+		'ne':     0x47,  //  ne
+		'lt':     0x49,  
+		'gt':     0x4b, 
+		'le':     0x00,
+		'ge':     0x00,  
+
+		'add': 0x6a, 
+		'sub': 0x6b, 
+		'mul': 0x6c, 
+		'div': 0x6d 
+	}
+
+	let instructions_bytes = instructions
+		.replace(/;;.*\n/g,'')
+    	.trim()
+    	.split(/[\s+\n+]+/g)
+		.map( op => OpCodes[op] || Number(op))
+
+	let code_section_bytes = [
+		10, instructions_bytes.length + 4, 1,  // sec id, size, num
+		instructions_bytes.length + 2, 0,      // - len, locals, 
+		...instructions_bytes,                 // - instructions
+		11,                                    // - end
+	]	
+
+	let module_bytes =  Uint8Array.from([
+		...module_template_bytes, 
+		...code_section_bytes
+	]);
+
+	let imports = { js:{
+		p: (str) => { out_div.innerHTML = str}
+	}}
+
+	let mod  = new WebAssembly.Module(   module_bytes);
+	let inst = new WebAssembly.Instance( mod, imports);
+
+	return inst;
+}
+
+</script>

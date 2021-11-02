@@ -1,0 +1,63 @@
+<pre id='p'></pre>
+<script>
+
+// let func = {
+
+// 	param:  []
+// 	result: []
+// 	local:  []
+// 	code:   []
+// };
+
+let wi = 
+`
+func (in i32) (out i32)
+	
+	(instr(a))
+
+`
+
+let tokens = Tokenize(wi);
+let tree   = Parse(tokens);
+
+PrintArray(tree);
+
+PrintArray(Parse(tree[tree.length-1]))
+function PrintArray(arr) {
+	for (let i of arr) p.innerHTML += i + '<br>';
+}
+
+function Tokenize(str) {
+
+	str = str.replaceAll('(', ' ( ')
+	str = str.replaceAll(')', ' ) ')
+
+	let tokens = str.trim().split(/[\s+\n+\t+]+/);
+
+	return tokens;
+}
+
+function Parse(array) {
+
+	let tree  = [];
+	let level = 0; 
+ 
+	for (let tok of array) {
+
+		if (tok == '(' && level == 0) {
+			tree.push([]);
+			level++;
+		}
+		if (tok == ')') {
+			level--;
+
+		}
+		else if (level > 0) {
+			tree[tree.length-1].push(tok); 
+		}
+		console.log(' ' + level + ' ' + tok);
+	}
+	return tree;
+}
+
+</script>

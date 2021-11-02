@@ -1,0 +1,51 @@
+<script src='split.js'> </script>
+<link href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.62.2/codemirror.min.css" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.62.2/codemirror.min.js"></script>
+
+<style>
+
+.main {
+	position:fixed;
+	left: 0; 
+	top:0; 
+	height:100%; 
+	width:100%;
+    display: flex;
+}
+.gutter { 
+	background-color: #222;
+}
+.gutter:hover {
+	background-color:#22a;
+}
+.CodeMirror {
+    border: none;
+    height: 100%;
+    background-color:#fafafa; 
+}
+</style>
+
+<div class='main'>
+    <div id='left'>
+    	<div id='up'></div>
+    	<div id='down'></div>
+    </div>
+    <div id='right'></div>
+</div>
+
+<script>
+
+Split(['#left','#right'])
+Split(['#up',  '#down'], {direction:'vertical'})
+
+let wat_editor = CodeMirror( up, {
+    lineNumbers:true, 
+    fixedGutter:false
+})
+
+let js_editor = CodeMirror( down, {
+    lineNumbers:true, 
+    fixedGutter:false
+})
+
+</script>

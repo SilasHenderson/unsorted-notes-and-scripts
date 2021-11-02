@@ -1,0 +1,63 @@
+<!doctype html> <meta charset='utf-8'>
+
+<canvas id='canvas'> </canvas>
+
+<script>
+
+let gl = canvas.getContext('webgl2');
+
+let tex = Texture(20,20)
+
+
+function Program(vertex_code, fragment_code) {
+
+    let program         = gl.createProgram();
+    let vertex_shader   = gl.createShader(gl.VERTEX_SHADER);    
+    let fragment_shader = gl.createShader(gl.FRAGMENT_SHADER);
+
+    gl.shaderSource( vertex_shader,   vertex_code);
+    gl.compileShader(vertex_shader); 
+    gl.shaderSource( fragment_shader, fragment_code);
+    gl.compileShader(fragment_shader);  
+
+    gl.attachShader( program, vertex_shader);
+    gl.attachShader( program, fragment_shader);
+    gl.linkProgram(  program); 
+    gl.useProgram(   program); 
+
+    return program  
+}
+
+function Texture(width,height,depth) {
+
+	if (typeof Texture.unit == 'undefined') Texture.unit = 0;
+	else Texture.unit++;
+
+    let tex = {
+        texture: gl.createTexture(), 
+        unit:    Texture.unit,
+        width:   width, 
+        height:  height };
+
+    gl.activeTexture(gl.TEXTURE0 +  tex.unit);
+    gl.bindTexture(  gl.TEXTURE_2D, tex.texture);
+
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, 
+    	width,height,0, gl.RGBA, gl.FLOAT,
+    	new Float32Array(4*length*width));  
+
+    // tex.set = (x,y,w,h,data) => {
+    // 	gl.activeTexture(gl.TEXTURE0 + tex.unit);
+    // 	gl.bindTexture(  gl.TEXTURE_2D, tex.texture);
+    // 	gl.texSubImage2D(gl.TEXTURE_2D, 0,x,y,w,h, tex.format,tex.type,data);
+    // }
+
+    return tex; 
+}
+
+</script>

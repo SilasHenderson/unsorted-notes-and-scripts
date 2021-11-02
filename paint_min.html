@@ -1,0 +1,77 @@
+<style> canvas{ border:solid 2px; } </style>
+<canvas id='canvas' width=300 height=300> </canvas>
+
+<script>
+
+let vertex_code = 
+`#version 300 es
+in vec2 pos;
+void main(){
+    gl_Position = vec4(pos,0.,1.);
+}`;
+
+let fragment_code = 
+`#version 300 es
+precision mediump float; 
+out vec4 color;
+void main() { 
+	  color = vec4( 0., 0., 0., 1.);
+}`;
+
+let gl = canvas.getContext('webgl2');
+
+let program         = gl.createProgram();  
+let vertex_shader   = gl.createShader(gl.VERTEX_SHADER);    
+let fragment_shader = gl.createShader(gl.FRAGMENT_SHADER);
+
+gl.shaderSource( vertex_shader,   vertex_code);
+gl.shaderSource( fragment_shader, fragment_code);
+gl.compileShader(vertex_shader);     
+gl.compileShader(fragment_shader);
+
+gl.attachShader( program, vertex_shader);
+gl.attachShader( program, fragment_shader);
+gl.linkProgram(  program); 
+gl.useProgram(   program);  
+
+gl.bindBuffer( gl.ARRAY_BUFFER, gl.createBuffer());
+gl.bufferData( gl.ARRAY_BUFFER, new Float32Array(1e6), gl.STATIC_DRAW);
+gl.enableVertexAttribArray( 0);
+gl.vertexAttribPointer( 0, 2, gl.FLOAT, false, 2*4,0); 
+
+let num_lines      = 0;
+let mouse_down     = false;
+let mouse_pos      = [0,0];
+let mouse_pos_last = [0,0];
+
+canvas.onmousedown = () => mouse_down = 1;
+canvas.onmouseup   = () => mouse_down = 0;
+
+canvas.onmousemove = (e) => {
+
+    mouse_pos_last = [...mouse_pos];
+    mouse_pos[0] = -1 + 2*e.offsetX/canvas.width;
+    mouse_pos[1] =  1 - 2*e.offsetY/canvas.height
+    
+    if (mouse_down){ 
+
+        let data = line_vertex_data(...mouse_pos_last,...mouse_pos);
+        let offset = num_lines*6*2*4;
+
+        gl.bufferSubData(gl.ARRAY_BUFFER, offset, data);
+        gl.drawArrays( gl.TRIANGLES, 0, ++num_lines*6);
+    }
+}
+
+function line_vertex_data(x0, y0, x1, y1, width=.015) {
+
+  let [dx,dy] = [x1-x0, y1-y0];
+  let L = Math.sqrt(dx*dx+dy*dy);
+  let [u,v] = [width*dy/L, width*dx/L];
+
+  return new Float32Array([
+    x0-u, y0+v, x0+u, y0-v, x1-u, y1+v, 
+    x0+u, y0-v, x1+u, y1-v, x1-u, y1+v
+  ])
+} 
+</script>

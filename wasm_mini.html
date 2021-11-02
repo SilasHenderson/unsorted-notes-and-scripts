@@ -1,0 +1,118 @@
+
+<p id='p'> </p>
+
+<script> 
+ 
+let wi = WasmInterpreter();
+
+
+
+/* ~ Module Sections ~ */
+
+// https://webassembly.github.io/spec/core/binary/modules.html#binary-datacountsec
+
+let Sections = {
+
+	'Type':[],
+	'Import':[],
+	'Function':[],
+	'Memory':[],
+}
+
+let Types = [
+
+]
+
+let Tree = [
+	[],        //   0  Custom
+	[],        //   1  Type
+	[],        //   2  Import
+	[],        //   3  Function
+	[],        //   4  Table
+	[],        //   5  Memory	
+	[],        //   6  Global
+	[],        //   7  Export
+	[],        //   8  Start
+	[],        //   9  Element
+	[],        //  10  Table
+	[],        //  11  Data
+]
+
+let bytes = wi.Encode(
+
+`00 61 73 6d 01 00 00 00 
+
+01 04 01             TYPE = [    
+60 00 00                {in:0, out:0}
+                     ]
+
+02 08 01             IMPORT = [
+02 6a 73 01 70          {module:'js', name:'p', desc:'function'}
+00 00                ]
+
+03 02 01           
+00
+
+08 01 00
+
+0a 04 01
+02 00 0b`);
+
+p.innerHTML += bytes.length;
+
+let mod = new WebAssembly.Module(bytes,{});
+
+p.innerHTML += mod
+
+/* ------------------------------------------------------------------- */
+
+function WasmInterpreter() {
+    
+	let wi = {};
+
+	wi.Dictionary = {}
+
+	let numbers = labels.map( 
+			x => wi.Dictionary[x] || Number('0x'+x)
+		);
+
+	wi.Split = (string) => {
+		return string.trim().split(/[\s+\n+]+/g) || [string];
+	}
+
+	// String --> Token Array
+	wi.Tokenize = (string) => {
+
+
+	
+		for (let word of words) {
+
+			let token = 
+		}
+		let token_array = [];
+	}
+
+
+	wi.Parse    = (str) => {}
+	wi.Emit     = (str) => {}
+	wi.Compile  = (str) => {}
+
+	wi.Encode = (str) => {
+    
+    	let labels  = str.trim().split(/[\s+\n+]+/g) || [str];
+		let numbers = labels.map( 
+			x => wi.Dictionary[x] || Number('0x'+x)
+		);
+		return Uint8Array.from(numbers);
+	}
+
+	wi.Instance = (str) => {
+
+		let magic_version = ' 00 61 73 6d 01 00 00 00 ';
+		let bytes = wi.Encode
+
+	}
+
+	return wi
+} 
+</script>

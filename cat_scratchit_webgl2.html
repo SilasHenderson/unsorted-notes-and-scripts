@@ -1,0 +1,176 @@
+<canvas id='canvas' width=500 height=500> </canvas>
+
+<script>
+
+let image_urls = [
+    'https://upload.wikimedia.org/wikipedia/commons/7/77/Avatar_cat.png',
+    'https://upload.wikimedia.org/wikipedia/commons/6/69/NASA-HS201427a-HubbleUltraDeepField2014-20140603.jpg'
+]
+
+let gl = canvas.getContext('webgl2');
+  gl.getExtension("EXT_color_buffer_float");
+let prog = ProgramBundle(
+`
+in vec2 pos;
+void main() {
+    gl_Position = vec4(pos, 0., 1.);
+}`, 
+`
+uniform sampler2D samp0, samp1, mask;
+out vec4 color;
+void main()
+{
+    ivec2 coord = ivec2(gl_FragCoord.xy);
+
+    vec3 c0 = texelFetch(samp0, coord, 0).rgb;
+    vec3 c1 = texelFetch(samp1, coord, 0).rgb;
+    float m = texelFetch(mask,  coord, 0).x;
+
+    color = vec4( m*c0 + (1.0-m)*c1, 1.0);
+    
+}`);
+
+let pos_buf = Buffer(new Float32Array([-1,-1, 1,-1,-1,1, 1,1]));
+
+gl.vertexAttribPointer( prog.pos,2,gl.FLOAT,false,0,0);
+
+let image0 = TextureBundle(0, [canvas.width, canvas.height,4]);
+let image1 = TextureBundle(1, [canvas.width, canvas.height,4]);
+let mask   = TextureBundle(2, [canvas.width, canvas.height,1]);
+
+image0.load_image(image_urls[0]);
+image1.load_image(image_urls[1]);
+
+gl.uniform1i( prog.samp0, image0.unit);
+gl.uniform1i( prog.samp1, image1.unit);
+gl.uniform1i( prog.mask,  mask.unit);
+
+canvas.onmousemove = (e) => {
+
+    let x = Math.floor(e.offsetX);
+    let y = Math.floor(canvas.height - e.offsetY);
+    mask.set(x-20,y-20, 40,40, new Float32Array(1600).fill(1));
+
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+}
+
+(async () => {
+    await new Promise(r=>setTimeout(1000));
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+})()
+
+/* - - - - - - - - - - - - - Functions - - - - - - - - - - - */
+  
+function Buffer(data) {
+
+  let buffer = gl.createBuffer();
+
+  gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+  gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
+
+  return buffer;
+}
+
+function ProgramBundle(vertex_code, fragment_code) {
+
+    // Returns program and attrib/uniform locations
+
+    let prog = { program:gl.createProgram()};
+    let vertex_shader   = gl.createShader(gl.VERTEX_SHADER);    
+    let fragment_shader = gl.createShader(gl.FRAGMENT_SHADER);
+
+    vertex_code   = "#version 300 es\n precision highp float;\n" + vertex_code;
+    fragment_code = "#version 300 es\n precision highp float;\n" + fragment_code;
+
+    gl.shaderSource( fragment_shader, fragment_code);
+    gl.shaderSource( vertex_shader,   vertex_code);
+    gl.compileShader(vertex_shader);     
+    gl.compileShader(fragment_shader);  
+
+    gl.attachShader( prog.program, vertex_shader);
+    gl.attachShader( prog.program, fragment_shader);
+    gl.linkProgram(  prog.program); 
+    gl.useProgram(   prog.program);  
+
+    let attrib_count = gl.getProgramParameter(prog.program, gl.ACTIVE_ATTRIBUTES); 
+    for (let i= 0; i < attrib_count; i++) {
+        let attrib_name     = gl.getActiveAttrib(  prog.program, i).name;   
+        let attrib_location = gl.getAttribLocation(prog.program, attrib_name);
+        gl.enableVertexAttribArray(attrib_location);
+        prog[attrib_name] = attrib_location;  
+    }
+
+    let uniform_count = gl.getProgramParameter( prog.program, gl.ACTIVE_UNIFORMS);
+    for (let i = 0; i < uniform_count; i++) {  
+        let uniform_name     = gl.getActiveUniform(  prog.program, i).name;
+        let uniform_location = gl.getUniformLocation(prog.program, uniform_name);
+        prog[uniform_name] = uniform_location;
+    }
+    console.log(gl.getShaderInfoLog(vertex_shader));
+    console.log(gl.getShaderInfoLog(fragment_shader));
+    console.log(gl.getProgramInfoLog(prog.program));
+
+    for (let i in prog) console.log(i, prog[i]);
+    return prog;
+}
+
+function TextureBundle(unit, size=[1,1,1], data=null) {
+
+    let tex = 
+    {
+        texture: gl.createTexture(), 
+        unit:    unit,
+        size:    size,
+        iformat: null, 
+        format:  null, 
+        type:    gl.FLOAT
+    };
+
+    let iformat, format, type;
+
+    if (size[2] == 1) { tex.iformat = gl.R32F;    tex.format = gl.RED; }
+    if (size[2] == 2) { tex.iformat = gl.RG32F;   tex.format = gl.RG;  }
+    if (size[2] == 3) { tex.iformat = gl.RGB32F;  tex.format = gl.RGB; }
+    if (size[2] == 4) { tex.iformat = gl.RGBA32F; tex.format = gl.RGBA;}
+
+    if (data == null) data = new Float32Array(size[0]*size[1]*size[2]);
+
+    gl.activeTexture(gl.TEXTURE0 + tex.unit);
+    gl.bindTexture(  gl.TEXTURE_2D, tex.texture);
+    gl.texParameterf(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    gl.texParameterf(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    gl.texParameterf(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameterf(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    
+    gl.texImage2D( gl.TEXTURE_2D, 0,
+        tex.iformat,
+        tex.size[0],tex.size[1],0,
+        tex.format,tex.type,data);
+
+    tex.load_image = (image_src) => {
+
+        let image = new Image();
+    
+        image.src = image_src;
+        image.crossOrigin = "Anonymous";
+
+        tex.size = [image.width, image.height];
+        image.onload = () => {
+            gl.activeTexture( gl.TEXTURE0 +  tex.unit);
+            gl.bindTexture(   gl.TEXTURE_2D, tex.texture);     
+            gl.pixelStorei(   gl.UNPACK_FLIP_Y_WEBGL, true);
+            gl.texImage2D(gl.TEXTURE_2D,0, gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,image);
+            gl.generateMipmap(gl.TEXTURE_2D);
+        } 
+    }
+    tex.set = (x,y,w,h, data) => {
+        gl.activeTexture(gl.TEXTURE0 +  tex.unit);
+        gl.bindTexture(  gl.TEXTURE_2D, tex.texture);
+        gl.texSubImage2D(gl.TEXTURE_2D, 0, 
+            x,y,w,h, gl.RED, gl.FLOAT, data, 0);
+    }
+
+    return tex; 
+}
+
+</script>

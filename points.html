@@ -1,0 +1,227 @@
+<style>
+
+canvas{ 
+	border:solid 2px;
+}
+</style>
+
+<p id='p'> </p>
+<canvas id='canvas' width=300 height=300> </canvas>
+
+<script>
+
+let ctx = canvas.getContext('2d');
+
+let node_pos   = node_posGrid(20,20,250,250, 20);
+let node_vel   = node_pos.map( () => [0,0]); 
+let node_force = node_pos.map( () => [0,0]);
+let node_mass  = node_pos.map( () => .1 + 100*Math.random());
+let node_fixed = node_pos.map( () => false); 
+
+let [el_node, el_len] = ElementMesh(30);
+
+let el_width = el_len.map(()=> 2*Math.random());
+
+let g = 10;
+let spring = 2000;
+
+let max_strain = .2;
+
+let mouse_x, mouse_y;
+
+canvas.onmousemove = (e) => {
+
+	mouse_x = e.offsetX;
+	mouse_y = e.offsetY;
+}
+
+(function loop() {
+
+	SnipNear(mouse_x, mouse_y);
+
+	for (let i = 0; i < 20; i++) {
+
+		RemoveOverstrainedElements();
+		UpdateForce();
+		UpdateVelocity(.05);
+		UpdateNodePosition(.05);
+	}
+	DrawElements();
+	DrawNodes();
+
+	requestAnimationFrame(loop);
+})();
+
+/* - - - Functions - - - */
+
+function DrawNodes() {
+
+	for (let node in node_pos) {
+
+		let x = node_pos[node][0];
+		let y = node_pos[node][1];
+		let s = Math.sqrt(node_mass[node]);
+
+		if (node_fixed[node]) {
+			ctx.fillStyle = '#cc0000';
+			ctx.fillRect(x-5, y-5, 10, 10);
+		} else {
+		    ctx.fillStyle = '#001100';
+			ctx.fillRect(x-s/2,y-s/2,s,s);
+		}
+	}
+}
+function DrawElements(){
+
+	ctx.clearRect(0,0,canvas.width, canvas.height);
+	ctx.strokeStyle = '#000077';
+
+	for (let el in el_node) {
+
+		let [a,b] = el_node[el];
+
+		ctx.beginPath();
+		ctx.lineWidth = el_width[el];
+ 		ctx.moveTo(node_pos[a][0], node_pos[a][1]);
+		ctx.lineTo(node_pos[b][0], node_pos[b][1]);
+		ctx.stroke();
+	}	
+}
+
+function ElementMesh(max_len) {
+
+	let el_node = [], el_len = [];
+
+	for (let a in node_pos) {
+   		for (let b in node_pos) {
+        
+        	let dx = node_pos[b][0] - node_pos[a][0];
+        	let dy = node_pos[b][1] - node_pos[a][1];
+        	let L  = Math.sqrt(dx*dx +dy*dy);
+
+        	if (L > 0 && L < max_len) {
+        		if (!el_node.includes([b,a])) {
+        			el_node.push([a,b]);
+        			el_len.push(L);
+        		}
+        	}
+    	}
+	}
+	return [el_node, el_len];
+}
+
+function node_posGrid(x,y,w,h, step){
+
+	let node_pos = [];
+
+	for (let X = x; X < x + w; X += step) {
+		for (let Y = y; Y < y + h; Y += step) {
+
+			node_pos.push( [X,Y]);
+		}
+	}	
+	return node_pos;
+}
+
+function RemoveOverstrainedElements() {
+
+	for (let el in el_node) {
+
+		let a = el_node[el][0];
+		let b = el_node[el][1];
+
+		let dx = node_pos[b][0] - node_pos[a][0];
+		let dy = node_pos[b][1] - node_pos[a][1];
+		let L  = Math.sqrt(dx*dx + dy*dy);
+
+    	let L0 = el_len[el];
+    	let strain = Math.abs((L - L0)/L0);
+		
+		if (strain > max_strain) {
+			el_node.splice(el,1);
+			el_len.splice(el,1);
+			el_width.splice(el,1);
+		}
+	}
+}
+
+function SnipNear(x,y, radius=20) {
+
+	for (let el in el_node) {
+
+		let a = el_node[el][0];
+		let b = el_node[el][1];
+
+		let dx = x - (node_pos[b][0] + node_pos[a][0])/2;
+		let dy = y - (node_pos[b][1] + node_pos[a][1])/2;
+		let L  = Math.sqrt(dx*dx + dy*dy);
+
+		if (L < radius) {
+			p.innerHTML = 'el: ' + el + '<br>';
+			el_node.splice(el,1);
+			el_len.splice(el,1);
+			el_width.splice(el,1);
+		}
+	}
+}
+
+function UpdateForce() {
+
+	for (let node in node_force) {
+		node_force[node][0] = 0;
+		node_force[node][1] = g;
+	}
+	for (let el in el_node) {
+
+		let a = el_node[el][0];
+		let b = el_node[el][1];
+
+		let dx = node_pos[b][0] - node_pos[a][0];
+		let dy = node_pos[b][1] - node_pos[a][1];
+
+		let L  = Math.sqrt(dx*dx + dy*dy);
+    	let L0 = el_len[el];
+    	let strain = (L - L0)/L0;
+
+    	let fx = (dx/L)*strain*spring;
+    	let fy = (dy/L)*strain*spring;
+
+    	node_force[a][0] += fx;
+		node_force[a][1] += fy;
+		node_force[b][0] -= fx;
+		node_force[b][1] -= fy;
+	}
+}
+
+function UpdateNodePosition(dt) {
+
+	for (let node in node_pos) {
+		node_pos[node][0] += node_vel[node][0]*dt;
+		node_pos[node][1] += node_vel[node][1]*dt;
+
+		if (node_pos[node][1] > canvas.height) {
+			node_pos[node][1] = canvas.height;
+			node_vel[node][1] *= -.9;
+		}
+	}
+}
+
+function UpdateVelocity(dt) {
+	
+	for (let node in node_vel) {
+		if (!node_fixed[node]){
+
+			let fx = node_force[node][0];
+			let fy = node_force[node][1];
+			let m  = node_mass[node];
+
+			node_vel[node][0] *= .999;
+			node_vel[node][1] *= .999;
+
+			node_vel[node][0] += fx/m*dt;
+			node_vel[node][1] += fy/m*dt;
+		}
+	}
+}
+
+</script>

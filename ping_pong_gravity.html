@@ -1,0 +1,399 @@
+<!doctype html> <meta charset='utf-8'>
+
+<!--
+
+2d gravity simulation with ping-pong method
+- - - - - - - - - - - - - - - - - - - - - -
+
+MATH
+
+The math for this script is same as 'gravity' 
+  https://codepen.io/silashenderson/pen/poRVGbV
+
+DATA
+
+  Textures store the numbers.  
+  Each texel has info about a point.  
+  Position and velocity textures each have an extra copy, 
+  so we can read from one and write to another.
+
+                - data textures - 
+     _ _ _ _ _       _ _ _ _ _
+   _|_ _ _ _  |    _|_ _ _ _  |    _ _ _ _ _
+  |         | |   |         | |   |         |
+  |Position | |   |Velocity | |   | Mass    |
+  |_ _ _ _ _|     |_ _ _ _ _|     |_ _ _ _ _|
+
+SHADERS
+
+  There's 2 shaders in this program.  
+
+  'display' draws the planets
+
+    READ                WRITE
+     _ _ _ _ _           _ _ _ _ _
+    |         |         |         |
+    |Position |  - - >  | Screen  |
+    |_ _ _ _ _|         |_ _ _ _ _|
+
+  'update' updates position and velocity
+
+    READ                WRITE
+     _ _ _ _ _           _ _ _ _ _
+    |         |         |         |
+    |Position |  - - >  |Position |
+    |_ _ _ _ _|         |_ _ _ _ _|
+     _ _ _ _ _           _ _ _ _ _
+    |         |         |         |
+    |Velocity |  - - >  |Velocity |
+    |_ _ _ _ _|         |_ _ _ _ _|
+
+PING PONG
+
+  The 'update' shader always 
+  reads the most recently updated textures and
+  writes to the other textures.
+
+  The read and write targets swap each iteration.
+  back and forth like 'ping-pong'
+
+  Iter   Read             Write
+  0      pos[0], vel[0]   pos[1], vel[1]
+  1      pos[1], vel[1]   pos[0], vel[0]
+  2      pos[0], vel[0]   pos[1], vel[1]
+  3      pos[1], vel[]    pos[0], vel[0]
+  4      pos[0], vel[0]   pos[1], vel[1]
+
+LINKS
+
+  The following article and script were very helpful:
+ 
+    http://www.vizitsolutions.com/portfolio/webgl/gpgpu/
+    https://github.com/turbo/js/blob/master/turbo.js
+
+-->
+
+<canvas id='canvas'> </canvas>
+
+<script>
+
+let num_planets = 2500;
+let dt          = .00005;
+
+let gl = canvas.getContext('webgl2');
+    gl.getExtension("EXT_color_buffer_float");
+
+let size = Math.floor(Math.sqrt(num_planets));
+
+/* - - - - - - - - Display Program - - - - - - - */
+
+let display = (() => {
+
+    let vertex_code = 
+    `
+    in ivec2 coord;
+    uniform sampler2D pos,mass;
+
+    void main() 
+    {   
+        gl_PointSize = sqrt(texelFetch(mass,coord,0).x);
+        gl_Position  = vec4(texelFetch(pos, coord,0).xy,0.,1.); 
+    }`;
+
+    let fragment_code = 
+    `
+    out vec4 color;
+    void main() 
+    {
+        color = vec4(1.,1.,1.,1.); 
+    }`;
+
+    let {program, coords, pos, mass } = ProgramBundle(vertex_code, fragment_code);
+    let coords_buf = Buffer(TextureCoordinates(size,size));
+
+    return (pos_unit, mass_unit) => {
+
+        gl.useProgram( program);
+        gl.bindBuffer(gl.ARRAY_BUFFER, coords_buf);
+        gl.vertexAttribIPointer( coords, 2, gl.INT, false, 0,0);
+
+        gl.uniform1i( pos,  pos_unit);
+        gl.uniform1i( mass, mass_unit);
+
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+        gl.viewport(0,0, canvas.width, canvas.height);
+        gl.drawArrays(gl.POINTS, 0, size*size);
+    }
+})()
+
+/* - - - - - - - - - Update Program - - - - - - - */
+
+let update = ProgramBundle(
+`
+in vec2 vertex;
+void main() 
+{
+    gl_Position = vec4(vertex, 0., 1.);
+}`, 
+`
+layout(location=0) out vec2 pos_next;
+layout(location=1) out vec2 vel_next;
+uniform sampler2D pos,vel,mass;
+
+vec2 POS(int x, int y) {
+    return texelFetch(pos, ivec2(x,y),0).xy;
+}
+vec2 VEL(int x, int y) {
+    return texelFetch(vel, ivec2(x,y),0).xy;
+}
+float MASS(int x, int y) {
+    return texelFetch(mass, ivec2(x,y),0).x;
+}
+
+void main() 
+{
+    vec2 posA, accA, posB, velA, unit;
+    float dist, massA, massB;
+    int x, y;
+
+    x = int(gl_FragCoord.x);
+    y = int(gl_FragCoord.y);
+
+    posA  = POS( x, y);
+    velA  = VEL( x, y);
+    massA = MASS(x, y);
+
+    for (x = 0; x < ${size}; x++) {
+        for (y = 0; y < ${size}; y++) {
+            
+            posB  = POS( x, y);
+            massB = MASS(x, y);
+            dist  = length(posB - posA) + .01;
+            unit  = (posB - posA)/dist;
+
+            accA += unit*(massB/massA)/(dist*dist);
+        }
+    }
+    vel_next = velA + accA*${dt};
+    pos_next = posA + vel_next*${dt};
+}`);
+
+update.vertex_buf = Buffer(new Float32Array([-1,-1, 1,-1,-1,1, 1,1]));
+
+update.run = (pos_unit, vel_unit, mass_unit, framebuffer) => {
+
+    gl.useProgram( update.program);
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, update.vertex_buf);
+    gl.vertexAttribPointer( update.vertex, 2, gl.FLOAT, false, 0,0);
+
+    gl.uniform1i( update.pos,  pos_unit);
+    gl.uniform1i( update.vel,  vel_unit);
+    gl.uniform1i( update.mass, mass_unit);
+
+    gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
+    gl.drawBuffers([gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1]);
+    gl.viewport(0,0,size,size);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+}
+
+/* - - - - - - - - Textures and Framebuffers - - - - - */
+
+let mass_data = [];
+let pos_data  = [];
+let vel_data  = [];
+
+for (let i = 0; i < size*size; i++) {
+
+    pos_data.push(
+        (.8 + .1*Math.cos(i/50))*Math.cos(2*Math.PI*i/(size*size)),
+        (.8 + .1*Math.cos(i/50))*Math.sin(2*Math.PI*i/(size*size))
+    );
+    vel_data.push( 20*pos_data[2*i+1], -20*pos_data[2*i]);
+    mass_data.push(1.5+50*Math.pow(Math.random(),700) + Math.cos(i/size));
+}
+pos_data  = new Float32Array(pos_data);
+vel_data  = new Float32Array(vel_data);
+mass_data = new Float32Array(mass_data);
+
+let mass_texture = TextureBundle(0, [size,size,1], mass_data);
+
+let pos_textures = [
+    TextureBundle(1, [size,size,2], pos_data),
+    TextureBundle(2, [size,size,2])
+];
+
+let vel_textures = [
+    TextureBundle(3, [size,size,2], vel_data),
+    TextureBundle(4, [size,size,2]),
+]
+
+let pos_vel_framebuffers = [
+    FrameBuffer(pos_textures[0].texture, vel_textures[0].texture), 
+    FrameBuffer(pos_textures[1].texture, vel_textures[1].texture)
+]
+
+/* - - - Main Loop - - - */
+
+let read = 0;
+let iter = 0;
+
+(function loop(){
+    
+    update.run( 
+        pos_textures[read].unit, 
+        vel_textures[read].unit, 
+        mass_texture.unit,
+        pos_vel_framebuffers[1-read]
+    );
+
+    read = 1 - read;
+    
+    display( 
+        pos_textures[read].unit, 
+        mass_texture.unit);
+
+    requestAnimationFrame(loop);
+})()
+
+/* - - - - - - - - - - - - - Functions - - - - - - - - - - - */
+
+function SetCanvasSize(){
+    canvas.width  = window.innerHeight;
+    canvas.height = window.innerHeight;
+    gl.viewport(0,0, canvas.width, canvas.height);
+}
+SetCanvasSize();
+
+window.addEventListener('resize', SetCanvasSize);
+
+function Buffer(data) {
+
+  let buffer = gl.createBuffer();
+
+  gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+  gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
+
+  return buffer;
+}
+
+function FrameBuffer(target_texture, target_texture2=null) {
+
+    let fbo = gl.createFramebuffer();
+    
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+    gl.framebufferTexture2D( gl.FRAMEBUFFER, 
+        gl.COLOR_ATTACHMENT0, 
+        gl.TEXTURE_2D, target_texture, 0
+    );
+   
+    if (target_texture2 != null) {
+        gl.framebufferTexture2D( gl.FRAMEBUFFER, 
+            gl.COLOR_ATTACHMENT1, 
+            gl.TEXTURE_2D, target_texture2, 0
+        );
+    }
+    return fbo; 
+}
+
+function ProgramBundle(vertex_code, fragment_code) {
+
+    // Returns program and attrib/uniform locations
+
+    let prog = { program:gl.createProgram()};
+    let vertex_shader   = gl.createShader(gl.VERTEX_SHADER);    
+    let fragment_shader = gl.createShader(gl.FRAGMENT_SHADER);
+
+    vertex_code   = "#version 300 es\n precision highp float;\n" + vertex_code;
+    fragment_code = "#version 300 es\n precision highp float;\n" + fragment_code;
+
+    gl.shaderSource( fragment_shader, fragment_code);
+    gl.shaderSource( vertex_shader,   vertex_code);
+    gl.compileShader(vertex_shader);     
+    gl.compileShader(fragment_shader);  
+
+    gl.attachShader( prog.program, vertex_shader);
+    gl.attachShader( prog.program, fragment_shader);
+    gl.linkProgram(  prog.program); 
+    gl.useProgram(   prog.program);  
+
+    let attrib_count = gl.getProgramParameter(prog.program, gl.ACTIVE_ATTRIBUTES); 
+    for (let i= 0; i < attrib_count; i++) {
+        let attrib_name     = gl.getActiveAttrib(  prog.program, i).name;   
+        let attrib_location = gl.getAttribLocation(prog.program, attrib_name);
+        gl.enableVertexAttribArray(attrib_location);
+        prog[attrib_name] = attrib_location;  
+    }
+
+    let uniform_count = gl.getProgramParameter( prog.program, gl.ACTIVE_UNIFORMS);
+    for (let i = 0; i < uniform_count; i++) {  
+        let uniform_name     = gl.getActiveUniform(  prog.program, i).name;
+        let uniform_location = gl.getUniformLocation(prog.program, uniform_name);
+        prog[uniform_name] = uniform_location;
+    }
+    console.log(gl.getShaderInfoLog(vertex_shader));
+    console.log(gl.getShaderInfoLog(fragment_shader));
+    console.log(gl.getProgramInfoLog(prog.program));
+
+    for (let i in prog) console.log(i, prog[i]);
+    return prog;
+}
+
+function TextureBundle(unit, size, data=null) {
+
+    let tex = 
+    {
+        texture: gl.createTexture(), 
+        unit:    unit,
+        size:    size
+    };
+
+    let iformat, format, type;
+
+    if (size[2] == 1) iformat = gl.R32F,    format = gl.RED,  type=gl.FLOAT;
+    if (size[2] == 2) iformat = gl.RG32F,   format = gl.RG,   type=gl.FLOAT;
+    if (size[2] == 3) iformat = gl.RGB32F,  format = gl.RGB,  type=gl.FLOAT;
+    if (size[2] == 4) iformat = gl.RGBA32F, format = gl.RGBA, type=gl.FLOAT;
+
+    if (data == null) data = new Float32Array(size[0]*size[1]*size[2]);
+
+    gl.activeTexture(gl.TEXTURE0 + tex.unit);
+    gl.bindTexture(  gl.TEXTURE_2D, tex.texture);
+    gl.texParameterf(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    gl.texParameterf(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    gl.texParameterf(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameterf(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texImage2D(   gl.TEXTURE_2D, 0,iformat,size[0],size[1],0,format,type,data);
+
+    console.log(tex);
+    console.log('texture: ',     gl.getParameter(gl.TEXTURE_BINDING_2D));
+
+    return tex; 
+}
+
+function TextureCoordinates(width,height) {
+
+    let coords = [];  
+    for (let x = 0; x < width; x++) {
+        for (let y = 0; y < height; y++) {
+            coords.push(x,y);
+        }
+    }
+    return new Int32Array(coords);
+}
+
+</script>
+ 
+<style>
+
+body{ 
+    background-color:#000; 
+    margin:0;
+}
+canvas{ 
+    display:block; 
+    margin: 0 auto;
+    padding:0;
+    background-color:#222;
+} 
+</style>

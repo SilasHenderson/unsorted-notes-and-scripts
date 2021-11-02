@@ -1,0 +1,96 @@
+<script>
+
+let sp = Splendor();
+
+function Splendor() {
+
+	sp = {}
+
+	sp._buffer = new ArrayBuffer(1000)
+	sp._offset = 0
+
+	sp.Load = (array, type) => {
+
+		let offset = sp._offset
+
+		let data
+		if (type == 'i32') data = new Int32Array(  sp._buffer, offset, array)
+		if (type == 'f32') data = new Float32Array(sp._buffer, offset, array)
+	
+		sp._offset += 4*data.length
+
+		return [offset, data]
+	}
+
+	sp.Sparse = (array) => {
+
+		let num_rows = 0;
+		array.forEach(([row,col,val]) => {
+			num_rows = Math.max(row+1, num_rows)
+		});
+
+		let size_array = new Array(num_rows).fill(0); 
+		let col_array  = new Array(num_rows).fill([]);
+		let val_array  = new Array(num_rows).fill([]);
+
+		array.forEach(([row,col,val]) => {
+			size_array[row] += 1
+			col_array[ row].push(col)
+			val_array[ row].push(val)
+		})
+		col_array = col_array.flat()
+		val_array = val_array.flat()
+
+		let [size_offset, size_data] = sp.Load(size_array, 'i32')
+		let [col_offset,  col_data]  = sp.Load(col_array,  'i32')
+		let [val_offset,  val_data]  = sp.Load(val_array,  'f32')	
+
+		let sparse = {
+
+			offset:{
+				size: size_offset,
+				col:  col_offset,
+				val:  val_offset,
+			},
+			data:{
+				size: size_data,
+				col:  col_data,
+				val:  val_data
+			}
+		}
+		return sparse
+	}	
+
+	sp.Vec = (array, type='f32') => {
+
+		let [offset, data] = sp.Load(array, type);
+
+		let vec = {
+			offset: offset, 
+			data:  data
+		};
+		return vec;
+	}
+
+	sp.SparseMul = (sparse, vec_in, vec_out) => {
+
+		let num_items = sparse.data.val.length;
+		let row       = 0;
+		let col_count = sparse.data.size[0]
+
+		vec_out.fill(0)
+
+		for (let item = 0; item < num_items; item++) {
+
+			if (col_count-- < 0) {
+				col_count = sparse.data.size[++row]
+			}
+
+			let col = sparse.data.col[item]
+			let val = sparse.data.val[item]
+
+			vec_out[row] += val*vec_in[col]
+		}
+	}
+	return sp
+}

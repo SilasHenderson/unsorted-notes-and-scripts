@@ -1,0 +1,212 @@
+<meta charset="utf-8">
+
+<p id='p'> </p>
+<canvas id='canvas' width=500 height=500></canvas>
+
+<script>
+
+let gl = canvas.getContext('webgl2');
+gl.getExtension('EXT_color_buffer_float')
+
+let prog = Program(
+`
+in vec2 pos;
+void main() {
+    gl_Position = vec4(pos, 0., 1.);
+}`,
+`
+out vec4 color;
+uniform sampler2D board;
+
+float cell(int x, int y) {
+    return texelFetch(board, ivec2(x,y), 0).x;
+}
+void main()
+{
+    int x = int(gl_FragCoord.x);
+    int y = int(gl_FragCoord.y);
+
+    float live = cell(x,y);
+
+    float neighbors =
+        cell(x-1,y+1)   + cell(x,y+1) + cell(x+1,y+1) +
+        cell(x-1,y)     +               cell(x+1,y)   +
+        cell(x-1,y-1)   + cell(x,y-1) + cell(x+1,y-1);
+
+    if (live == 1.0) {
+        if (neighbors < 2.0) live = 0.0;
+        if (neighbors > 3.0) live = 0.0;
+    }
+    else {
+        if (neighbors == 3.0) live = 1.0;
+    }
+
+    color = vec4(live,live,live,1.);
+}`);
+
+Buffer(new Float32Array([-1,-1, 1,-1,-1,1, 1,1]));
+
+gl.vertexAttribPointer(prog.pos,2,gl.FLOAT, false, 0,0);
+
+let textures     = [
+    Texture([500,500,4]),    
+    Texture([500,500,4])
+];
+
+let framebuffers = [
+    FrameBuffer(textures[0].texture), 
+    FrameBuffer(textures[1].texture)
+];
+
+textures[0].bind();
+
+gl.texSubImage2D(gl.TEXTURE_2D, 0, 
+    50,50,400,400, gl.RGBA, gl.FLOAT, new Float32Array(4*400*400).fill(1))
+
+let counter = 0;
+let read = 0;
+
+(function loop() {
+
+    p.innerHTML = counter++;
+
+    textures[read].bind();
+    gl.uniform1i(prog.board, textures[read].unit);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffers[1-read]);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+
+    read = 1 - read;
+
+    textures[read].bind();
+    gl.uniform1i(prog.board, textures[read].unit);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+
+    requestAnimationFrame(loop);
+})()
+
+function Texture(image_url_or_size) {
+
+    if (typeof Texture.next != 'number') Texture.next = 0;
+    else Texture.next++;
+
+    let tex = {
+        texture: gl.createTexture(), 
+        size:[1,1,1],
+        unit: Texture.next
+    }
+
+    if (typeof image_url_or_size == 'string') {
+
+        let image = new Image();
+        image.src = image_url;
+        image.crossOrigin = "Anonymous";
+
+        image.onload = () => {
+            tex.size = [image.width, image.height, 4];
+            gl.activeTexture( gl.TEXTURE0 +  tex.unit);
+            gl.bindTexture(   gl.TEXTURE_2D, tex.texture);     
+            gl.pixelStorei(   gl.UNPACK_FLIP_Y_WEBGL, true);
+            gl.texImage2D(gl.TEXTURE_2D,0, gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,image);
+            gl.generateMipmap(gl.TEXTURE_2D);
+            console.log('made tex object:', Object.entries(tex));
+        } 
+    }
+    if (typeof image_url_or_size != 'string') {
+
+        let [w,h,d] = image_url_or_size;
+
+        let ifmt, fmt, type;
+
+        if (d == 1) ifmt = gl.R32F,    fmt = gl.RED,  type=gl.FLOAT;
+        if (d == 2) ifmt = gl.RG32F,   fmt = gl.RG,   type=gl.FLOAT;
+        if (d == 3) ifmt = gl.RGB32F,  fmt = gl.RGB,  type=gl.FLOAT;
+        if (d == 4) ifmt = gl.RGBA32F, fmt = gl.RGBA, type=gl.FLOAT;
+
+        let data = new Float32Array(w*h*d);
+
+        gl.activeTexture(gl.TEXTURE0 + tex.unit);
+        gl.bindTexture(  gl.TEXTURE_2D, tex.texture);
+        gl.texParameterf(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+        gl.texParameterf(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+        gl.texParameterf(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+        gl.texParameterf(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+        gl.texImage2D(   gl.TEXTURE_2D, 0, ifmt,w,h,0,fmt,type, data);
+
+        tex.size = [w,h,d];
+    }
+
+    tex.bind = () => {
+        gl.activeTexture(gl.TEXTURE0 +  tex.unit);
+        gl.bindTexture(  gl.TEXTURE_2D, tex.texture);
+    }
+    console.log(Object.entries(tex))
+    return tex; 
+}
+
+function Buffer(data) {
+
+  let buffer = gl.createBuffer();
+
+  gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+  gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
+
+  return buffer;
+}
+
+function FrameBuffer(target_texture) {
+
+    let fbo = gl.createFramebuffer();
+    
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+    gl.framebufferTexture2D( gl.FRAMEBUFFER, 
+        gl.COLOR_ATTACHMENT0, 
+        gl.TEXTURE_2D, target_texture, 0
+    );
+   
+    return fbo; 
+}
+
+function Program(vertex_code, fragment_code) {
+
+    // Returns program and attrib/uniform locations
+
+    let prog = { program:gl.createProgram()};
+    let vertex_shader   = gl.createShader(gl.VERTEX_SHADER);    
+    let fragment_shader = gl.createShader(gl.FRAGMENT_SHADER);
+
+    vertex_code   = "#version 300 es\n precision highp float;\n" + vertex_code;
+    fragment_code = "#version 300 es\n precision highp float;\n" + fragment_code;
+
+    gl.shaderSource( fragment_shader, fragment_code);
+    gl.shaderSource( vertex_shader,   vertex_code);
+    gl.compileShader(vertex_shader);     
+    gl.compileShader(fragment_shader);  
+
+    gl.attachShader( prog.program, vertex_shader);
+    gl.attachShader( prog.program, fragment_shader);
+    gl.linkProgram(  prog.program); 
+    gl.useProgram(   prog.program);  
+
+    let attrib_count = gl.getProgramParameter(prog.program, gl.ACTIVE_ATTRIBUTES); 
+    for (let i= 0; i < attrib_count; i++) {
+        let attrib_name     = gl.getActiveAttrib(  prog.program, i).name;   
+        let attrib_location = gl.getAttribLocation(prog.program, attrib_name);
+        gl.enableVertexAttribArray(attrib_location);
+        prog[attrib_name] = attrib_location;  
+    }
+
+    let uniform_count = gl.getProgramParameter( prog.program, gl.ACTIVE_UNIFORMS);
+    for (let i = 0; i < uniform_count; i++) {  
+        let uniform_name     = gl.getActiveUniform(  prog.program, i).name;
+        let uniform_location = gl.getUniformLocation(prog.program, uniform_name);
+        prog[uniform_name] = uniform_location;
+    }
+    console.log(gl.getShaderInfoLog(vertex_shader));
+    console.log(gl.getShaderInfoLog(fragment_shader));
+    console.log(gl.getProgramInfoLog(prog.program));
+
+    for (let i in prog) console.log(i, prog[i]);
+    return prog;
+}
+</script>

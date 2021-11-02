@@ -1,0 +1,124 @@
+<style> 
+
+canvas{ 
+  background-color:#ccc; 
+  position:fixed; 
+  left:0%; top:0%; width:100%; height:100%;
+} 
+</style>
+
+<canvas id='canvas'> </canvas>
+
+<script>
+
+canvas.width  = canvas.getBoundingClientRect().width;
+canvas.height = canvas.getBoundingClientRect().height;
+
+let gl = canvas.getContext('webgl2');
+
+let vertex_code = 
+
+`#version 300 es
+
+in vec2 pos;
+uniform vec2 span, center;
+
+void main(void) 
+{
+ 	gl_Position  = vec4( span*pos + center, 0., 1.);
+}`;
+
+let fragment_code = 
+
+`#version 300 es
+precision mediump float; 
+
+out vec4 color;
+
+void main(void) 
+{ 
+	color = vec4( 0., 0., 0., 1.);
+}`;
+
+let program         = gl.createProgram();  
+let vertex_shader   = gl.createShader(gl.VERTEX_SHADER);    
+let fragment_shader = gl.createShader(gl.FRAGMENT_SHADER);
+
+gl.shaderSource( vertex_shader,   vertex_code);
+gl.shaderSource( fragment_shader, fragment_code);
+gl.compileShader(vertex_shader);     
+gl.compileShader(fragment_shader);  
+
+gl.attachShader( program, vertex_shader);
+gl.attachShader( program, fragment_shader);
+gl.linkProgram(  program); 
+gl.useProgram(   program);  
+
+let pos_attrib     = gl.getAttribLocation(  program, 'pos');
+let span_uniform   = gl.getUniformLocation( program, 'span');
+let center_uniform = gl.getUniformLocation( program, 'view');
+
+gl.bindBuffer( gl.ARRAY_BUFFER, gl.createBuffer());
+gl.bufferData( gl.ARRAY_BUFFER, new Float32Array(1e6), gl.STATIC_DRAW);
+
+gl.enableVertexAttribArray(pos_attrib);
+gl.vertexAttribPointer( pos_attrib, 2, gl.FLOAT, false, 2*4,0); 
+
+let span   = new Float32Array([1,1]);
+let center = new Float32Array([0,0]); 
+
+let pos_offset = 0; 
+
+let mouse_down = 0;			
+let mouse_pos  = new Float32Array([0,0]);
+
+document.onmousedown = (e) => mouse_down = 1; 
+document.onmouseup   = (e) => mouse_down = 0; 
+
+document.onmousemove = (e) => { 
+
+	mouse_pos[0] =   2*( e.offsetX/canvas.width  - 1); 
+	mouse_pos[1] = - 2*( e.offsetY/canvas.height - 1); 
+	
+}
+
+(function loop() {
+
+	if (mouse_down) { 
+
+
+    let new_data = line_vertices()
+		gl.bufferSubData(gl.ARRAY_BUFFER, 0, xy_data);
+
+		add_line_data( mouse_x_last, mouse_y_last, mouse_x, mouse_y ); }
+	
+
+	gl.bufferSubData(gl.ARRAY_BUFFER, 0, xy_data);
+	gl.drawArrays( gl.TRIANGLES, 0, draw_index/2);
+	requestAnimationFrame(loop); 
+}()
+
+/*---------------------------------------------------------------*/
+
+function line_vertices( pt0 = [0,0], pt1 = [1,1], width = .01) {
+  
+  let dx = pt1[0] - pt0[0];
+  let dy = pt1[0] - pt0[1];
+
+  let L  = Math.sqrt(dx*dx + dy*dy);
+
+  let u  = dy*width/L;
+  let v  = dx*width/L;
+  
+  let V = [
+    x0 - u, y0 + v, 
+    x0 + u, y0 - v, 
+    x1 - u, y1 + v, 
+    x0 + u, y0 - v, 
+    x1 + u, y1 - v, 
+    x1 - u, y1 + v
+  ]
+  return new Float32Array(V); 
+} 
+  
+</script>

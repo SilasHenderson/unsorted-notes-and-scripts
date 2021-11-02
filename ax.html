@@ -1,0 +1,174 @@
+<h1> Ax </h1>
+<p> Test of 'ax' object plot helper </p>
+<hr>
+
+<p> <button id='btn'> Run </button> </p>
+<p>
+<textarea id='paper' spellcheck='false' rows=2></textarea> 
+
+<canvas id='canvas' width=500 height=400> </canvas>
+</p>
+<script>
+
+paper.value = 
+`
+let ax = Ax('canvas')
+
+let x_data = [0,1,2,3,4,5]
+let y_data = [2,2,1,4,2,4]
+
+ax.xlim = [0,5]
+ax.ylim = [0,5]
+
+ax.grid(10)
+ax.title('Test Plot')
+ax.line(x_data, y_data)`;
+
+eval(paper.value)
+
+btn.onclick = () => eval(paper.value);
+
+/* -------------------------------------- */
+function Ax(canvas_id) {
+
+	let ax = {};
+
+	ax.canvas = document.getElementById(canvas_id);
+	ax.ctx    = ax.canvas.getContext('2d');
+
+	ax.mouse = {
+		click:false,
+    	down:false,
+    	x:0,
+    	y:0
+	}
+
+ 	ax.canvas.onmousedown = () => { 
+		mouse.down  = 1; 
+		mouse.click = 1; 
+	}
+	ax.canvas.onmouseup = () => {
+		mouse.down = 0;
+	}
+	ax.canvas.onmousemove = (e) => { 
+    	mouse.x = e.offsetX;
+    	mouse.y = e.offsetY;
+	}
+
+	ax.Left   = .10;
+	ax.Top    = .15;
+	ax.Width  = .80;
+	ax.Height = .75;
+
+	ax.xlims = [];
+	ax.ylims = [];
+
+	ax.axes_pos = (x,y) => {
+		
+		(ax.xhigh - ax.xlow)/( ax.Top*ax.canvas.width);
+
+		return [
+			ax.xlow + (x - ax.Left*ax.canvas.width)
+			
+	}
+	ax.canvas_pos = (x,y) => {
+		
+		let x_norm = (x - ax.xlow )/(ax.xhigh - ax.xlow);
+		let y_norm = (ax.yhigh - y)/(ax.yhigh - ax.ylow);
+			
+		return [
+			ax.canvas.width*( ax.Left + ax.Width*x_norm), 
+			ax.canvas.height*(ax.Top  + ax.Height*y_norm)
+		]
+	}
+
+	ax.line = (x,y, color='blue', width=2) => {
+
+		ax.ctx.strokeStyle = color; 
+		ax.ctx.lineWidth   = width;
+		ax.ctx.beginPath();
+		ax.ctx.moveTo(...ax.canvas_pos(x[0],y[0]) );
+
+		for (let i = 1; i < x.length; i++) {
+			ax.ctx.lineTo(...ax.canvas_pos(x[i],y[i]) ); 
+		}
+		ax.ctx.stroke();
+	}
+
+	ax.grid = (density = 10) => {
+
+		// Plot lims and Grid Spacing
+		let x0 = ax.xlim[0];
+		let x1 = ax.xlim[1];
+		let y0 = ax.ylim[0];
+		let y1 = ax.ylim[1];
+		let dx = (x1-x0)/density;
+		let dy = (y1-x0)/density;
+
+		// Canvas, axes background colors
+		ax.ctx.fillStyle = '#f9f9f9';
+		ax.ctx.fillRect(0,0,ax.canvas.width,ax.canvas.height);
+		ax.ctx.fillStyle = '#f2f2f2';
+		
+		let [left,top] = ax.canvas_pos(ax.xlow, ax.ylow);
+
+
+		ax.ctx.fillRect(
+			...ax.canvas_pos([ax.xlow, ax.ylow]), 
+
+			ax.canvas_pos(ax.ylow), 
+			ax.canvas_x(ax.xlim[0]), 
+			ax.canvas_y(ax.ylim[0]),
+			ax.canvas_x(ax.xlim[1]) - ax.canvas_x(ax.xlim[0]), 
+			ax.canvas_y(ax.ylim[1]) - ax.canvas_y(ax.ylim[0]))
+			
+		// Grid x
+		ax.ctx.font 		= '14px sans-serif'
+		ax.ctx.fillStyle 	= '#000077';
+		ax.ctx.textAlign    = 'center';
+		ax.ctx.textBaseline = 'top';		
+		for (let x = x0; x <= x1; x += dx) {
+			ax.line([x,x], [y0, y1], '#777777', .5);
+			ax.line([x,x], [y0, y0 + .01*(y1-y0)], 'black', 1);
+			ax.line([x,x], [y1, y1 - .01*(y1-y0)], 'black', 1);
+			if (x != x0 && x != x1) {
+				ax.ctx.fillText( 
+					x.toFixed(1), ax.canvas_x(x), 5+ax.canvas_y(y0)); }}
+
+		// Grid y
+		ax.ctx.textBaseline = 'middle';
+		ax.ctx.textAlign    = 'end';
+		for (let y = y0; y <= y1; y += dy) {
+			ax.line([x0, x1],             [y,y], '#777777',.5);
+			ax.line([x0, x0+.01*(x1-x0)], [y,y], 'black', 1)
+			ax.line([x1, x1-.01*(x1-x0)], [y,y], 'black', 1)
+			if (y != y0 && y != y1) {
+				ax.ctx.fillText( 
+					y.toFixed(1), ax.canvas_x(x0)-5, ax.canvas_y(y));}}
+		
+		// Plot Box
+		ax.line( [x0,x1,x1,x0,x0],
+		         [y0,y0,y1,y1,y0], 'black', 2)}
+
+	ax.title = (text) => { 		
+		ax.ctx.font         = '30px sans-serif';
+		ax.ctx.fontWeight   = 'bold';
+		ax.ctx.fillStyle    = 'black';
+		ax.ctx.textBaseline = 'top';
+		ax.ctx.textAlign    = 'center'
+		ax.ctx.fillText(text, canvas.width/2,15); }
+
+	return ax; }
+
+</script>
+
+<style> 
+	canvas{ 
+		border:solid 1px; 
+		border-radius:5px;} 
+
+	textarea{ 
+		border:solid 1px; width:400px; height:400px; 
+		font:20px sans-serif;
+		padding:5px;}
+</style>

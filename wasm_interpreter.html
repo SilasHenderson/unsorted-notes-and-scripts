@@ -1,0 +1,144 @@
+
+<p id='p'> </p>
+
+<script> 
+ 
+let wi = WasmInterpreter();
+
+let bytes = wi.Encode(
+
+`00 61 73 6d 01 00 00 00 
+
+01 04 01 
+60 00 00
+
+02 08 01
+02 6a 73 01 70
+00 00
+
+03 02 01 
+00
+
+08 01 00
+
+0a 04 01
+02 00 0b`);
+
+p.innerHTML += bytes.length;
+
+let mod = new WebAssembly.Module(bytes,{});
+
+p.innerHTML += mod
+
+/* ------------------------------------------------------------------- */
+
+function WasmInterpreter() {
+    
+	let wi = {};
+
+	wi.Dictionary = {
+
+		'nop':    0x01,  //  No Operation
+		'block':  0x02,  //  Block with label index at end: br(labelidx)
+		'loop':   0x03,  //  Block with label index at start
+		'if':     0x04,  //  If statement --> unlabeled block
+		'else':   0x05,  //  Mark 'else' block of if
+		'end':    0x0b,  //  End a block, loop, if, or function
+		'br':     0x0c,  //  Branch to a label
+		'br_if':  0x0d,  //  Conditionally branch to a label
+		'return': 0x0f,  //  Return 0 or more values from this fn
+		'call':   0x10,  //  Call a func 
+
+		'get':    0x20,  //  local.get
+		'set':    0x21,  //  local.set
+		'tee':    0x22,  //  local.tee
+
+		'load':   0x28,  //  i32.load
+		'store':  0x36,  //  i32.store
+		'const':  0x41,  //  i32.const
+		'eqz':    0x45,  //  i32.eqz
+		'eq':     0x46,  //  i32.eq
+		'ne':     0x47,  //  ne
+		'lt':     0x49,  //  lt
+		'gt':     0x4b,  //  gt
+		'le':     0x00,  //  ///////
+		'ge':     0x00,  //  ///////
+		'add':    0x6a,
+		'sub':    0x6b, 
+		'mul':    0x6c, 
+		'div':    0x6d 
+	}
+
+	let tree = {
+
+		type[0] = 'in i32'
+
+		func[0] = 'import js.p 0';
+
+
+		import: [
+			{ kind:'func', name:'js.p', sig_idx:0}
+		]
+
+		func: [
+			sig_idx]
+
+		start: 
+
+		
+	}
+
+
+	let wi.MAIN_BOILERPLATE = 
+  	`
+	00 61 73 6d  	 ${/* MAGIC   */}
+    01 00 00 00      ${/* VERSION */}
+	
+	01               ${/* TYPE SECTION             */}	
+    09 02  		     ${/* (9 bytes, 2 types)       */}	
+	60 01 xx 00      ${/* - type 0: 1 i32 in 0 out */}
+	60 00 00 00      ${/* - type 1: 0 in 0 out     */}
+
+	02               ${/* IMPORT SECTION           */}
+    08 01            ${/* (8 bytes, 1 import)      */}
+	02 6a 73 01 00   ${/* - import js.p            */}
+    00 00            ${/* - is func type[0]        */}
+
+	03               ${/* FUNCTION SECTION         */}
+    02 01   		 ${/* (2 bytes, 1 func decl)   */}
+	00               ${/* - func[1] has type[0]    */}
+
+	08               ${/* START SECTION            */}
+    01  		     ${/* (1 byte)                 */}
+    01               ${/* - call func[1] on start  */}
+
+    0a               ${/* CODE SECTION             */}
+    CODE_SIZE 01     ${/* (? bytes, 1 code)        */}
+    FUNC_SIZE 00     ${/* - ? bytes, 0 locals      */}
+    FUNC_BODY        ${/* - ...instructions...     */}
+    0b               ${/* - end */}
+    `
+    wi.Main = (instructions) => {
+		
+		let module_string = 
+			wi.MAGIC_VERSION, 
+			wi.MAIN_BOILERPLATE + 
+			instructions_string;
+
+		let module_tokens = module_string.trim().split(/[\s+\n+]+/g);
+		
+		let module_numbers = module_tokens.map(
+			x => wi.Dictionary[x] || Number('0x'+x)
+		);
+
+  		let module_bytes = Uint8Array.from(module_numbers);
+
+  		let wasm_module   = new WebAssembly.Module( module_bytes, {});
+		let wasm_instance = new WebAssembly.Instance(_module, {});  
+
+		return wasm_instance;
+	}
+
+	return wi
+} 
+</script>

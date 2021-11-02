@@ -1,0 +1,285 @@
+<!doctype html>
+<meta charset='utf-8'>
+
+<style>
+
+body {
+    margin: 0;
+    background-color:#000;
+}
+div {
+    font-family:sans-serif;
+    font-size:18px;
+    color:#ccccff;
+    position:fixed;
+    left:0; 
+    top:5px;
+    width:100%;
+}
+canvas {
+    display: block;
+    margin: 0 auto;
+}
+button {
+    height: 40px;
+    width: 40px;
+    font-size: 30px;
+    font-weight: bold;
+}
+
+</style>
+
+<div>
+
+    <p id='info'> info </p>
+
+    Zoom
+    <br>
+    <button id='zoom_in'>  + </button> 
+    <button id='zoom_out'> - </button>
+    <br><br>
+
+    Move
+    <br>
+    <button id='move_left'>  &leftarrow;  </button>
+    <button id='move_right'> &rightarrow; </button>
+    <button id='move_up'>    &uparrow;    </button>
+    <button id='move_down'>  &downarrow;  </button>  
+    <br><br>
+    
+    C Real, C Imag
+    <br>
+    <button id='c_real_plus'>  + </button>
+    <button id='c_real_minus'> - </button>
+    <button id='c_imag_plus'>  + </button> 
+    <button id='c_imag_minus'> - </button>   
+    <br><br>
+
+    Iterations
+    <br>
+    <button id='iter_plus'>  + </button>
+    <button id='iter_minus'> - </button>
+</div>
+
+<canvas id='canvas'> </canvas>
+
+<script>
+
+/* ----------------- Renderer -------------------- */
+
+let gl = canvas.getContext('webgl2')
+ 
+let prog = ProgramBundle(
+`
+in vec2 pos;             
+out vec2 z_pos;
+uniform vec2 center;
+uniform float span;
+
+void main() { 
+    z_pos = span*pos + center;   
+    gl_Position = vec4(pos, 0.0, 1.0); 
+}`,
+`
+in vec2 z_pos;             
+out vec4 color;   
+uniform float max_iter;
+uniform vec2 c;         
+
+vec2 complex_sqr(vec2 a) { 
+
+    return vec2(a.x*a.x-a.y*a.y, 2.0*a.x*a.y);
+}
+
+vec4 colorize(float iter, float max_iter) { 
+
+    if (iter == max_iter) { 
+        return vec4(1.0,1.0,1.0,1.0);
+    } 
+    else {
+        float n = 1.0 - sqrt(sqrt(iter/max_iter)); 
+        return vec4(n, n, n, 1.); 
+    }
+}
+
+void main() {
+
+    vec2 z = z_pos;  
+    float iter = 0.0;
+
+    while (++iter < max_iter) { 
+
+        z = complex_sqr(z) - c;     
+        if (length(z) > 2.0) break; 
+    }
+    color = colorize(iter, max_iter);
+}`);
+
+prog.pos_buf = Buffer(new Float32Array([-1,-1, 1,-1, 1,1, -1,1]));
+
+gl.vertexAttribPointer(prog.pos, 2, gl.FLOAT, false, 4*2, 0);
+
+prog.run = ({center, span, c, iter}) => {
+
+    gl.uniform2fv(prog.center,   new Float32Array(center));
+    gl.uniform1f( prog.span,     span);
+    gl.uniform2fv(prog.c,        new Float32Array(c));
+    gl.uniform1f( prog.max_iter, iter);
+
+    gl.drawArrays(gl.TRIANGLE_FAN, 0, 4); 
+}
+
+/* --------------- View State + Controls ------------------ */
+
+let view = {
+
+    center: [0,0],
+    span:   1,
+    iter:   100, 
+    c:      [-.35, -.38],
+
+    speed: {
+        center: [0,0], 
+        span:   1, 
+        iter:   0, 
+        c:      [0,0]
+    }
+}
+
+view.update = () => {
+
+    if (view.speed.center[0] == 0 &&
+        view.speed.center[1] == 0 &&
+        view.speed.c[0]      == 0 &&
+        view.speed.c[1]      == 0 &&
+        view.speed.span      == 1 &&
+        view.speed.iter      == 0) {
+
+        return false;
+    }
+    else {
+
+        view.center[0] += view.speed.center[0];
+        view.center[1] += view.speed.center[1];
+        view.span      *= view.speed.span;
+        view.c[0]      += view.speed.c[0];
+        view.c[1]      += view.speed.c[1];
+        view.iter      += view.speed.iter;
+
+        return true;
+    }
+}
+
+zoom_in.onmousedown      = () => view.speed.span      =  .99;
+zoom_out.onmousedown     = () => view.speed.span      = 1.01; 
+
+move_left.onmousedown    = () => view.speed.center[0] = -.01*view.span;
+move_right.onmousedown   = () => view.speed.center[0] =  .01*view.span;
+move_up.onmousedown      = () => view.speed.center[1] =  .01*view.span;
+move_down.onmousedown    = () => view.speed.center[1] = -.01*view.span;
+
+c_real_plus.onmousedown  = () => view.speed.c[0] =  .01*view.span;
+c_real_minus.onmousedown = () => view.speed.c[0] = -.01*view.span;
+c_imag_plus.onmousedown  = () => view.speed.c[1] =  .01*view.span;
+c_imag_minus.onmousedown = () => view.speed.c[1] = -.01*view.span;
+
+iter_plus.onmousedown    = () => view.speed.iter =  1;
+iter_minus.onmousedown   = () => view.speed.iter = -1;
+
+document.onmouseup = () => {
+
+    view.speed.center[0] = 0;
+    view.speed.center[1] = 0;
+    view.speed.span      = 1;
+    view.speed.iter      = 0;
+    view.speed.c[0]      = 0;
+    view.speed.c[1]      = 0;
+}
+
+function SetCanvasSize(){
+    canvas.width  = window.innerHeight;
+    canvas.height = window.innerHeight;
+    gl.viewport(0,0, canvas.width, canvas.height);
+}
+SetCanvasSize();
+
+window.addEventListener('resize', () => {
+
+    SetCanvasSize();
+    prog.run(view)
+})
+
+/* ----------------- Main Loop ------------------------ */
+
+prog.run(view);
+
+(function loop() {
+
+    if (view.update()) {  
+        prog.run(view);
+    }
+
+    info.innerHTML = 
+    `c: ${view.c[0].toFixed(2)} + ${view.c[1].toFixed(2)}i 
+    <br>
+    iterations:${view.iter} 
+    `
+    requestAnimationFrame(loop);
+})()
+
+/* ----------------- Functions ------------------------ */
+
+function Buffer(data) {
+
+    let buffer = gl.createBuffer();
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+    gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
+
+    return buffer;
+}
+
+function ProgramBundle(vertex_code, fragment_code) {
+
+    // Returns program and attrib/uniform locations
+
+    let prog = { program:gl.createProgram()};
+    let vertex_shader   = gl.createShader(gl.VERTEX_SHADER);    
+    let fragment_shader = gl.createShader(gl.FRAGMENT_SHADER);
+
+    vertex_code   = "#version 300 es\n precision highp float;\n" + vertex_code;
+    fragment_code = "#version 300 es\n precision highp float;\n" + fragment_code;
+
+    gl.shaderSource( fragment_shader, fragment_code);
+    gl.shaderSource( vertex_shader,   vertex_code);
+    gl.compileShader(vertex_shader);     
+    gl.compileShader(fragment_shader);  
+
+    gl.attachShader( prog.program, vertex_shader);
+    gl.attachShader( prog.program, fragment_shader);
+    gl.linkProgram(  prog.program); 
+    gl.useProgram(   prog.program);  
+
+    let attrib_count = gl.getProgramParameter(prog.program, gl.ACTIVE_ATTRIBUTES); 
+    for (let i= 0; i < attrib_count; i++) {
+        let attrib_name     = gl.getActiveAttrib(  prog.program, i).name;   
+        let attrib_location = gl.getAttribLocation(prog.program, attrib_name);
+        gl.enableVertexAttribArray(attrib_location);
+        prog[attrib_name] = attrib_location;  
+    }
+
+    let uniform_count = gl.getProgramParameter( prog.program, gl.ACTIVE_UNIFORMS);
+    for (let i = 0; i < uniform_count; i++) {  
+        let uniform_name     = gl.getActiveUniform(  prog.program, i).name;
+        let uniform_location = gl.getUniformLocation(prog.program, uniform_name);
+        prog[uniform_name] = uniform_location;
+    }
+    console.log(gl.getShaderInfoLog(vertex_shader));
+    console.log(gl.getShaderInfoLog(fragment_shader));
+    console.log(gl.getProgramInfoLog(prog.program));
+
+    for (let i in prog) console.log(i, prog[i]);
+    return prog;
+}
+
+</script>

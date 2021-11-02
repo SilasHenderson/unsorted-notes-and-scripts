@@ -1,0 +1,54 @@
+<canvas id='canvas'></canvas>
+
+<script>
+
+let ctx = canvas.getContext('2d');
+
+let mouse = {
+	click:false,
+    down:false,
+    x:0,
+    y:0
+}
+document.onmousedown = () => { 
+	mouse.down  = 1; 
+	mouse.click = 1; 
+}
+document.onmouseup = () => {
+	mouse.down = 0;
+}
+canvas.onmousemove = (e) => { 
+    mouse.x = e.offsetX;
+    mouse.y = e.offsetY;
+}
+
+function line(){
+
+	this.xdata = [];
+	this.ydata = [];
+	this.color = [];
+	this.width = [];
+}
+
+
+(function loop(){
+	
+	if (mouse.down) {
+		
+		xdata.push(mouse.x);
+    	ydata.push(mouse.y); 
+		
+		ctx.beginPath();
+		ctx.moveTo(xdata[0], ydata[0]);
+		for (let i = 1; i < xdata.length; i++) {
+			let x = xdata[i];
+			let y = ydata[i];
+			ctx.lineTo(x,y);
+		}
+		ctx.stroke();
+	}
+
+ 	requestAnimationFrame(loop);
+ })()
+
+</script>

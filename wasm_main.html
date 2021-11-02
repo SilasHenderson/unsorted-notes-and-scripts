@@ -1,0 +1,171 @@
+<!doctype html> <meta charset="utf-8">
+
+<button id='btn'> Run </button>
+<hr>
+
+<div>
+    <b>Instructions</b>
+    <pre id='instructions_div' spellcheck=false contenteditable=true></pre>
+</div>
+<div>
+    <b>Results</b>
+    <pre id='results_div' style='background-color:#f2f2ff'></pre>
+</div>
+
+<style>
+
+  div {
+    float:left; 
+    width:300px; 
+    margin:10px;
+  }
+  button{ 
+    margin:2px;
+    font-size:18px; 
+  }
+  pre {
+    font-size:18px; 
+    background-color:#eeeeee;
+    border:solid 1px;
+    padding: 2px;
+    white-space:pre-wrap;
+    overflow-x:auto;
+    word-break: keep-all;
+  }
+</style>
+<script>
+
+instructions_div.innerHTML = 
+`i32.const 0
+ call $print
+`
+btn.onclick = () => {
+
+    WasmVoidMain(instructions_div.textContent, results_div);
+}
+
+function WasmVoidMain(instructions, output_div) { 
+
+  output_div.innerHTML = '';
+
+  let instr = instructions
+      .trim()
+      .split(/[\s\n\r]/)
+
+  console.log(instr);
+
+  instr = instr.map( op => op_code_dictionary[op] || Number(op))
+
+  let code_section = [
+      10,                       // code section id
+      instr.length + 4,         // code section size
+      1,                        // code section num
+      instr.length + 2,         // - (main) code[0]: len
+      0,                        // - (main) code[0]: locals
+      ...instr,                 // - (main) code[0]: instructions
+      11,                       // - (main) code[0]: end
+  ] 
+
+  let module_bytes =  Uint8Array.from([
+    ...module_template, 
+    ...code_section
+  ]);
+
+  let print_cue = '';
+  let imports = { js:{
+    p: (str) => { print_cue += 'print: ' + str + '<br>'}
+  }}
+
+  WebAssembly.instantiate(module_bytes, imports)
+      .then(  result => output_div.innerHTML += '')
+      .catch(  error => output_div.innerHTML += error.message + '<br>')
+      .finally(   () => output_div.innerHTML += 
+          print_cue + '<hr>' + 
+          instr.map(x=>x.toString(16)).join('<br>')
+     );
+}
+
+/* --------------------- Data ------------------------- */
+
+var module_template = [    
+
+    0x00, 0x61, 0x73, 0x6d,  // "this file is wasm
+    0x01, 0x00, 0x00, 0x00,  // ... version 1"
+                  
+    0x01,                    // ~ Types Section ~
+    0x08, 0x02,              // is 8 bytes, 2 types
+    0x60, 0x01, 0x7f, 0x00,  // - type[0] is (1 i32 in, 0 out)
+    0x60, 0x00, 0x00,        // - type[1] is (0 in, 0 out)
+            
+    0x02,                    // ~ Import Section ~
+    0x08, 0x01,              // is 8 bytes, 1 import
+    0x02, 0x6a, 0x73,        // - import[0] module name is 2 byte 'js', 
+    0x01, 0x70,              // - import[0] field  name is 1 byte 'p'
+    0x00, 0x00,              // - import[0] is function with sig idx 0
+  
+    0x03,                    // ~ Function Section ~ 
+    0x02, 0x01,              // is 2 bytes, 1 function     
+    0x01,                    // - func[1] has signature type[1]
+              
+    0x08,                    // ~ Start Section !
+    0x01, 0x01               // is 1 byte, calls func[1]
+
+]                            // ~ Code Section (EMPTY) ~
+
+var op_code_dictionary = {
+  
+    '$print': 0x00,  
+
+    'nop':    0x01, 
+    'block':  0x02, 
+    'loop':   0x03, 
+    'if':     0x04,  
+    'else':   0x05, 
+    'end':    0x0b,  
+    'br':     0x0c, 
+    'br_if':  0x0d,  
+    'return': 0x0f,  
+    'call':   0x10, 
+
+    'local.get':  0x20,  
+    'local.set':  0x21, 
+    'local.tee':  0x22,  
+
+    'i32.load':   0x28, 
+    'i32.store':  0x36, 
+    'i32.const':  0x41, 
+    'i32.eqz':    0x45, 
+    'i32.eq':     0x46, 
+    'i32.ne':     0x47, 
+    'i32.lt_s':   0x49,  
+    'i32.gt_s':   0x4b, 
+    'i32.le_s':   0x00,
+    'i32.ge_s':   0x00,  
+    'i32.add':    0x6a, 
+    'i32.sub':    0x6b, 
+    'i32.mul':    0x6c, 
+    'i32.div':    0x6d, 
+
+    'v128':       0x7b, 
+    'simdop':     0xfd, 
+    'v128.load':  0x00, 
+    'v128.store': 0x0b, 
+    'v128.const': 0x0c, 
+
+    'i32x4.add':  [0xfd, 0xae],
+    'i32x4.sub':  [0xfd, 0xb1],
+    'i32x4.mul':  [0xfd, 0xb5], 
+
+    'f32x4.add':  [0xfd, 0xe4], 
+    'f32x4.sub':  [0xfd, 0xe5], 
+    'f32x4.mul':  [0xfd, 0xe6], 
+    'f32x4.div':  [0xfd, 0xe7]
+}
+
+</script>
+
+<!-- 
+
+https://github.com/WebAssembly/simd/blob/main/proposals/simd/BinarySIMD.md 
+
+-->

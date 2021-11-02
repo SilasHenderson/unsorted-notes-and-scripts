@@ -1,0 +1,175 @@
+<!doctype html> <meta charset='utf-8'>
+
+<canvas id='canvas'> </canvas>
+
+<script>
+
+let gl = InitGL(canvas);
+
+let board  = g.Array(100,100);
+let update = g.Function(
+`
+float live = i(x,y);
+
+float neighbors =
+    i(x-1,y+1) + i(x,y+1) + i(x+1,y+1) +
+    i(x-1,y+0) + 0.0      + i(x+1,y+0) +
+    i(x-1,y-1) + i(x,y-1) + i(x+1,y-1);
+
+if (live == 1.0) 
+{
+    if (neighbors < 2.0) live = 0.0;
+    if (neighbors > 3.0) live = 0.0;
+}
+else 
+{
+    if (neighbors == 3.0) live = 1.0;
+}
+o = vec4(live, live, live, 1.);
+`);
+
+(function loop(){
+
+    f(g, g);
+    f(g);
+
+    requestAnimationFrame(loop)
+})()
+
+
+
+/* -------------------- Array Generator ------------------ */
+
+function InitGL(canvas) {
+
+    let gl = canvas.getContext('webgl2');
+        gl.getExtension("EXT_color_buffer_float");
+
+    let buffer   = gl.createBuffer();
+    let data     = new Float32Array([-1,-1, 1,-1, -1,1, 1,1]);
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+    gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
+
+    return gl;
+}
+
+function Grid(width,height){
+	
+    if ( Grid.count == undefined) Grid.count = 0;
+    else Grid.count++;
+
+	let grid = {};
+
+	grid.width        = width;
+    grid.height       = height;
+    grid.index        = 0; 
+    grid.units        = [ 2*Grid.count,           2*Grid.count + 1      ];
+    grid.textures     = [ gl.createTexture(),     gl.createTexture()    ];
+    grid.framebuffers = [ gl.createFramebuffer(), gl.createFramebuffer()];   
+
+    /* Init textures and framebuffers */
+
+  	for (let i of [0,1]) { 	
+
+        gl.activeTexture( gl.TEXTURE0 +  grid.units[i]);
+        gl.bindTexture(   gl.TEXTURE_2D, grid.textures[i]);
+        gl.texParameteri( gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+        gl.texParameteri( gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+        gl.texImage2D(    gl.TEXTURE_2D, 0, gl.RGBA32F,
+            width, height, 0, gl.RGBA, gl.FLOAT, new Float32Array(4*width*height) );
+ 
+        gl.bindFramebuffer(      gl.FRAMEBUFFER, grid.framebuffers[i]);
+        gl.framebufferTexture2D( gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, 
+            gl.TEXTURE_2D, grid.textures[i], 0); 
+    }
+    grid.set = (x,y,w,h, data) => {
+
+        if (data.length < w*h) {
+
+            let data = new Float32Array(w*h);
+        }
+
+        gl.activeTexture( gl.TEXTURE0 +  grid.units[    grid.index]);
+        gl.bindTexture(   gl.TEXTURE_2D, grid.textures[ grid.index]);
+        gl.texSubImage2D( gl.TEXTURE_2D, 0, x,y,w,h, gl.RGBA, gl.FLOAT, data ); 
+    }
+  	return grid;
+}
+
+function Kernel(code){ 
+
+    /* - Vertex and fragment shader text - */
+
+    let vertex_code = 
+
+    `#version 300 es
+
+    layout (location=0) in vec2 vertices;
+    void main() 
+    {
+        gl_Position = vec4(vertices, 0.,1.);
+    }`;
+
+    let fragment_code = 
+
+    `#version 300 es
+    precision highp float;
+
+    out vec4 o;
+    uniform sampler2D sampler;
+
+    vec4 i(int x, int y) {
+        return texelFetch(sampler, ivec2(x,y), 0).x;
+    }
+    void main() 
+    {
+        int x = int(gl_FragCoord.x);
+        int y = int(gl_FragCoord.y);   
+        ${ code }
+    }`;
+
+    /* - Make shaders, compile, build glsl shader program - */
+
+    let program         = gl.createProgram();
+ 	let vertex_shader   = gl.createShader(gl.VERTEX_SHADER);
+    let fragment_shader = gl.createShader(gl.FRAGMENT_SHADER);
+
+    gl.shaderSource(  vertex_shader, vertex_code);
+    gl.compileShader( vertex_shader);     
+    gl.shaderSource(  fragment_shader, fragment_code);                     
+    gl.compileShader( fragment_shader);
+
+    gl.attachShader(  program, vertex_shader);
+    gl.attachShader(  program, fragment_shader);
+    gl.linkProgram(   program);     
+
+    let sampler  = gl.getUniformLocation(program, 'sampler'); 
+    let vertices = gl.getAttribLocation( program, 'vertices');
+    
+    gl.enableVertexAttribArray(vertices);
+
+    /* Return a function */
+
+    return (grid_in, grid_out=null) => {
+
+        gl.useProgram(program);
+        gl.vertexAttribPointer(vertices, 2, gl.FLOAT, false, 0,0);
+        gl.uniform1i( sampler, grid_in.units[grid_in.index] ); 
+        
+        // if no second argument, draw to screen        
+        if (grid_out == null) { 
+            gl.bindFramebuffer( gl.FRAMEBUFFER, null); 
+            gl.viewport(0,0, canvas.width, canvas.height);   
+        } 
+        // or draw to framebuffer
+        else {  
+            grid_out.index = 1 - grid_out.index;    
+            gl.bindFramebuffer(gl.FRAMEBUFFER,grid_out.framebuffers[grid_out.index]);
+            gl.viewport( 0,0, grid_out.width, grid_out.height);  
+        }  
+        // Draw 
+        gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4); 	
+    }
+}
+</script>

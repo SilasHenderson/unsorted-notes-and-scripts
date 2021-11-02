@@ -1,0 +1,144 @@
+<canvas id='canvas'> </canvas>
+<script>
+
+let gl = canvas.getContext('webgl2')
+
+let a = TextureBundle([50,50,4]);
+let b = TextureBundle([50,50,2]);
+
+let prog = ProgramBundle(
+`
+in vec2 pos;             
+void main() { 
+    gl_Position = vec4(pos, 0.0, 1.0); 
+}`,
+`           
+out vec4 color;   
+void main() {
+    color = vec4(0., 0., 1., 1.);
+}`);
+
+
+
+/* ------------------------------------------------------- */
+
+function Buffer(data) {
+
+  let buffer = gl.createBuffer();
+
+  gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+  gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
+
+  return buffer;
+}
+
+function Framebuffer(target_textures) {
+
+    let framebuffer = gl.createFramebuffer();
+    let attachments = target_textures.length || 1;
+
+    gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
+
+    for (let i = 0; i < attachments; i++) { 
+        gl.framebufferTexture2D( gl.FRAMEBUFFER, 
+            gl.COLOR_ATTACHMENT0+i,gl.TEXTURE_2D,arguments[i], 0)
+    }
+    return fbo; 
+}
+
+function TextureBundle(size, dtype='f32') {
+
+    TextureBundle.COUNT = TextureBundle.COUNT + 1 || 0
+    TextureBundle.TABLE = {
+        'f32': {
+            '1': [gl.R32F,    gl.RED,  gl.FLOAT, Float32Array],
+            '2': [gl.RG32F,   gl.RG,   gl.FLOAT, Float32Array], 
+            '3': [gl.RGB32F,  gl.RGB,  gl.FLOAT, Float32Array], 
+            '4': [gl.RGBA32F, gl.RGBA, gl.FLOAT, Float32Array]
+        }
+    }
+    let [iformat,format,type,ARRAY] = 
+        TextureBundle.TABLE[dtype][size[2].toString()];
+
+    let tex = {
+        object:  gl.createTexture(), 
+        unit:    TextureBundle.COUNT,
+        size:    size,
+        iformat: iformat,
+        format:  format,
+        type:    type, 
+        ARRAY:   ARRAY, 
+    }
+    gl.activeTexture(gl.TEXTURE0 +  tex.unit);
+    gl.bindTexture(  gl.TEXTURE_2D, tex.object);
+    gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.NEAREST);
+    gl.texStorage2D( gl.TEXTURE_2D, 1, iformat, size[0], size[1]);        
+    gl.texSubImage2D(gl.TEXTURE_2D, 0, 0,0,size[0],size[1], 
+        format, type, new tex.ARRAY(size[0]*size[1]*size[2]));
+
+    tex.set = (x,y,w,h,data)=>{
+        gl.activeTexture(gl.TEXTURE0 +  tex.unit);
+        gl.bindTexture(  gl.TEXTURE_2D, tex.object);
+        gl.texSubImage2D(gl.TEXTURE_2D, 0, x,y,w,h, 
+            tex.format, tex.type, new tex.ARRAY(data));
+    }
+    if (tex.object) {
+        console.log(' ~ made a texture bundle ~ ');
+        Object.entries(tex).forEach( ([key,val]) => {
+            if (typeof val == 'function') val = '[function]'
+            console.log('tex.' + key + ' = ' + val);})
+    }
+    return tex; 
+}
+
+function ProgramBundle(vertex_code, fragment_code) {
+
+    // Returns program and attrib/uniform locations
+
+    let prog = { program:gl.createProgram()};
+    let vertex_shader   = gl.createShader(gl.VERTEX_SHADER);    
+    let fragment_shader = gl.createShader(gl.FRAGMENT_SHADER);
+
+    vertex_code   = "#version 300 es\n precision highp float;\n" + vertex_code;
+    fragment_code = "#version 300 es\n precision highp float;\n" + fragment_code;
+
+    gl.shaderSource( fragment_shader, fragment_code);
+    gl.shaderSource( vertex_shader,   vertex_code);
+    gl.compileShader(vertex_shader);     
+    gl.compileShader(fragment_shader);  
+
+    gl.attachShader( prog.program, vertex_shader);
+    gl.attachShader( prog.program, fragment_shader);
+    gl.linkProgram(  prog.program); 
+    gl.useProgram(   prog.program);  
+
+    let attrib_count = gl.getProgramParameter(prog.program, gl.ACTIVE_ATTRIBUTES); 
+    for (let i= 0; i < attrib_count; i++) {
+        console.log(gl.getActiveAttrib(prog.program, i))
+        let attrib_name     = gl.getActiveAttrib(  prog.program, i).name;   
+        let attrib_location = gl.getAttribLocation(prog.program, attrib_name);
+        gl.enableVertexAttribArray(attrib_location);
+        prog[attrib_name] = attrib_location;  
+    }
+    let uniform_count = gl.getProgramParameter( prog.program, gl.ACTIVE_UNIFORMS);
+    for (let i = 0; i < uniform_count; i++) {  
+        console.log(gl.getActiveUniform(  prog.program, i))
+        let uniform_name     = gl.getActiveUniform(  prog.program, i).name;
+        let uniform_location = gl.getUniformLocation(prog.program, uniform_name);
+        prog[uniform_name] = uniform_location;
+    }
+    if (prog.program) {
+        console.log(' ~ made a program bundle ~ ');
+        Object.entries(prog).forEach( ([key,val]) => {
+            console.log('prog.' + key + ' = ' + val);
+        })
+    }
+    else {
+        console.log(gl.getShaderInfoLog(vertex_shader));
+        console.log(gl.getShaderInfoLog(fragment_shader));
+        console.log(gl.getProgramInfoLog(prog.program));
+    }
+    return prog;
+}
+</script>

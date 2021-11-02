@@ -1,0 +1,471 @@
+<canvas id='canvas' width=500 height=500> </canvas>
+<pre>
+<b> Keyboard </b>
+
+  MOVE   UP/DOWN   TURN
+    e                i
+  s d f   g h      j k l
+</pre>
+<pre id='info'> </pre>
+
+<style> 
+    pre{font-size:larger;}
+    canvas{float:left; background-color:#222;} 
+</style>
+
+<script>
+
+/*  Scene with Boxes and a Keyboard Camera
+    with WebGL2 and JavaScript
+*/
+
+/* - - - - - - Shader Codes - - - - - */
+
+/*  Transform data to a cube space ( x/w, y/w, z/w )
+
+    Data --> Vertex Shader --> 
+
+              o - - - o 
+             /|      /|
+            / |     / |         
+    y=1    o - - - o  |       
+    |      |  . - -|- o    z= -1   
+    |      | SCREEN| /    /       
+    |      |/      |/    /           
+    y=-1   o - - - o    z=1
+          x=-1 -- x=1
+
+            /_
+           o
+          -|-
+           )\
+*/
+
+let vertex_code =  
+`
+in vec3 pos, color;
+out vec3 color_copy;
+uniform mat4 view, proj;
+
+void main() 
+{   
+    color_copy  = color; 
+    gl_Position = proj*view*vec4( pos, 1.); 
+}`;
+
+
+/* Color Each pixel(fragment)   
+    _ _ _ _ _ _
+   |...........|
+   |......./|..|
+   |....../.|..|
+   |...../._|..|
+   |_ _ _ _ _ _|
+
+*/
+
+let fragment_code = 
+`
+in vec3 color_copy;
+out vec4 frag_color;
+
+void main() 
+{
+    frag_color = vec4(color_copy, 1.0);
+}`;
+
+/* - - - - - - Vertex Data - - - - - */
+
+/*  Make Vertex data for a bunch of Cubes
+
+    Each cube is made with 12 triangles
+    Each vertex (36 total) has:
+    3 numbers for position (x,y,z) and 
+    3 numbers for color    (r,g,b)   
+*/
+
+let num_cubes = 1000;
+
+let pos_data   = [];
+let color_data = [];
+
+for (let cube = 0; cube < num_cubes; cube++) {
+
+    let pos   = [1000*Rand(),         0, 1000*Rand()];
+    let size  = [  10*Rand(), 10*Rand(),   10*Rand()];
+    let color = [Rand(), Rand(), Rand()];
+
+    pos_data.push( ... CubeVertices( pos, size));
+
+    for (let v = 0; v < 36; v++) {
+        color_data.push( ...color);
+    }
+}
+
+/* - - - - - WebGL Setup - - - - - */
+
+// WebGL Context and Program 
+
+let gl = canvas.getContext('webgl2');
+gl.enable(gl.DEPTH_TEST);
+
+let prog = ProgramBundle(vertex_code, fragment_code);
+
+// Buffers and Attributes
+
+let pos_buffer   = Buffer(pos_data);
+let color_buffer = Buffer(color_data);
+
+gl.bindBuffer(gl.ARRAY_BUFFER, pos_buffer);
+gl.vertexAttribPointer( prog.pos, 3, gl.FLOAT, false, 3*4, 0);
+
+gl.bindBuffer(gl.ARRAY_BUFFER, color_buffer);
+gl.vertexAttribPointer( prog.color, 3, gl.FLOAT, false, 3*4, 0);
+
+// 'camera' object to help with View Matrix
+
+let start_camera_pos    = [1000, 20, 1000];
+let start_camera_target = [0,0,0];
+
+let cam = ViewCamera( start_camera_pos, start_camera_target); 
+
+cam.move_speed = 2;
+
+// Set Projection and View Matrix
+
+gl.uniformMatrix4fv( prog.proj, false, new Float32Array([
+   1, 0, 0, 0, 
+   0, 1, 0, 0, 
+   0, 0, 1, 1, 
+   0, 0, 0, 1 ])
+);
+
+gl.uniformMatrix4fv( prog.view, true, cam.Matrix())
+
+/* - - - - - Main Loop - - - - - */
+
+function loop() {
+
+    // Update Camera
+
+    cam.Update();
+    gl.uniformMatrix4fv( prog.view, true, cam.Matrix());
+
+    // Draw, Print Info
+
+    gl.drawArrays(gl.TRIANGLES, 0, num_cubes*36);
+    info.innerHTML = cam.Info();
+
+    requestAnimationFrame(loop);
+
+};
+
+loop(); 
+
+/* - - - - - Functions - - - - - - */
+
+function ProgramBundle(vertex_code, fragment_code) {
+
+    /*  Return program and attrib/uniform locations
+
+        let pb = ProgramBundle(v_code, f_code)
+    
+        pb.program == program
+        pb.(name)  == location
+        pb.(name)  == location    
+        ...
+    */
+
+    // Build Shader Program
+
+    let pb = { program: gl.createProgram() };
+    
+    let vertex_shader   = gl.createShader(gl.VERTEX_SHADER);    
+    let fragment_shader = gl.createShader(gl.FRAGMENT_SHADER);
+
+    vertex_code   = "#version 300 es\n precision highp float;\n" + vertex_code;
+    fragment_code = "#version 300 es\n precision highp float;\n" + fragment_code;
+
+    gl.shaderSource( fragment_shader, fragment_code);
+    gl.shaderSource( vertex_shader,   vertex_code);
+    gl.compileShader(vertex_shader);     
+    gl.compileShader(fragment_shader);  
+
+    gl.attachShader( pb.program, vertex_shader);
+    gl.attachShader( pb.program, fragment_shader);
+    gl.linkProgram(  pb.program); 
+    gl.useProgram(   pb.program);  
+
+    // Store Attribute Locations
+
+    let attrib_count = gl.getProgramParameter(pb.program, gl.ACTIVE_ATTRIBUTES); 
+    for (let i= 0; i < attrib_count; i++) {
+        let attrib_name     = gl.getActiveAttrib(  pb.program, i).name;   
+        let attrib_location = gl.getAttribLocation(pb.program, attrib_name);
+        gl.enableVertexAttribArray(attrib_location);   
+        pb[attrib_name] = attrib_location;  
+    }
+
+    // Store Uniform Locations
+
+    let uniform_count = gl.getProgramParameter( pb.program, gl.ACTIVE_UNIFORMS);
+    for (let i = 0; i < uniform_count; i++) {  
+        let uniform_name     = gl.getActiveUniform(  pb.program, i).name;
+        let uniform_location = gl.getUniformLocation(pb.program, uniform_name);
+        pb[uniform_name] = uniform_location;
+    }
+
+    /*  Return object with program and locations
+
+        Example: 
+
+            pb = { 
+                program: program, 
+                (name): location, 
+                (name): location, ...
+                ...
+            }
+    */
+    return pb;
+}
+
+function Buffer(data) {
+
+    /*  Make Active Buffer with 'data' */
+
+    let buffer = gl.createBuffer();
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(data), gl.STATIC_DRAW);
+
+    return buffer;
+}
+
+function ViewCamera(position, target) {
+    
+    let cam = {};
+
+    /* Get Elevation and Azimuth angles from Position and Target
+                       
+    _ _              Position        D = sqrt(x*x + y*y + z*z)
+     |             Y  /|             R = sqrt(x*x + z*z)
+     |             | D |      
+   unit.y          |/  |         
+     =        Target)el|___X     _ _
+   sin(el)        /_\  |  /      /
+     |           /az R | /      /    unit.z = cos(az)*cos(el)
+    _|_         /_ _ _\|/     _/_
+               Z             
+              /-------/ 
+              unit.x = sin(az)*cos(el)      
+    */
+
+    let dx = position[0] - target[0];
+    let dy = position[1] - target[1];
+    let dz = position[2] - target[2];
+
+    let R  = Math.sqrt(dx*dx + dz*dz);
+    let D  = Math.sqrt(dx*dx + dy*dy + dz*dz);
+
+    let cos_az = dz/R; // need fix
+    let sin_el = dy/D;
+
+    cam.eye           = position;
+    cam.azimuth       = Math.acos(cos_az);
+    cam.elevation     = Math.asin(sin_el);
+    
+    cam.move_speed    =   2;
+    cam.turn_speed    = .03;
+  
+    cam.forward_vel   = 0;
+    cam.up_vel        = 0;
+    cam.side_vel      = 0;  
+
+    cam.elevation_vel = 0;
+    cam.azimuth_vel   = 0;
+
+    cam.Unit = () => { return [
+
+        Math.cos(cam.elevation)*Math.sin(cam.azimuth),
+        Math.sin(cam.elevation),
+        Math.cos(cam.elevation)*Math.cos(cam.azimuth)]; 
+    }
+
+    cam.Update = (dt = .01) => { 
+
+        cam.elevation += cam.elevation_vel;                      
+        cam.azimuth   += cam.azimuth_vel; 
+                
+        cam.eye[0] -= cam.side_vel*Math.cos(cam.azimuth);   
+        cam.eye[1] += cam.up_vel;
+        cam.eye[2] += cam.side_vel*Math.sin(cam.azimuth);
+
+        cam.eye = Add(cam.eye, Scale(cam.Unit(), cam.forward_vel));
+    }
+
+    cam.Matrix = () => {
+
+        let fwd  = Scale(cam.Unit(),-1);
+        let left = Normalize(Cross([0,1,0], fwd));
+        let up   = Normalize(Cross(fwd, left));
+
+        let mat = new Float32Array([
+
+            ...left, -Dot( left, cam.eye),
+              ...up, -Dot(   up, cam.eye),
+             ...fwd, -Dot(  fwd, cam.eye),
+            0, 0, 0, 1
+        ]);
+        return mat;
+    }
+
+    cam.Info = () => {
+
+        let info_string = 
+        "<b> Camera </b><br>" + 
+        "   Position X: "  + cam.eye[0].toFixed(2)    + "<br>" + 
+        "   Position Y: "  + cam.eye[1].toFixed(2)    + "<br>" + 
+        "   Position Z: "  + cam.eye[2].toFixed(2)    + "<br>" + 
+        "   Azimuth: "     + cam.azimuth.toFixed(2)   + "<br>" + 
+        "   Elevation: "   + cam.elevation.toFixed(2) + "<br><br>" + 
+        "<b> Matrix </b> <br><br>";
+
+        let mat = cam.Matrix();
+
+        for (let row = 0; row < 4; row++) {
+            for (let col = 0; col < 4; col++) {
+                let val = (mat[4*row + col]).toFixed(2);
+                info_string += ('       ' + val).slice(-7) + ', ';
+            }
+            info_string += '<br>';
+        }
+        return info_string;
+    }
+
+    document.onkeydown = (e) => {
+
+        if (e.key == "l")  cam.azimuth_vel   =  cam.turn_speed;
+        if (e.key == "j")  cam.azimuth_vel   = -cam.turn_speed;
+        if (e.key == "k")  cam.elevation_vel =  cam.turn_speed;
+        if (e.key == "i")  cam.elevation_vel = -cam.turn_speed;
+        if (e.key == "h")  cam.up_vel        =  cam.move_speed;
+        if (e.key == "g")  cam.up_vel        = -cam.move_speed;
+        if (e.key == "s")  cam.side_vel      = -cam.move_speed;
+        if (e.key == "f")  cam.side_vel      =  cam.move_speed;
+        if (e.key == "e")  cam.forward_vel   = -cam.move_speed;
+        if (e.key == "d")  cam.forward_vel   =  cam.move_speed; 
+    }
+    
+    document.onkeyup = (e) => {
+
+        if (e.key == "j" || e.key == "l") cam.azimuth_vel   = 0;
+        if (e.key == "i" || e.key == "k") cam.elevation_vel = 0;
+        if (e.key == "e" || e.key == "d") cam.forward_vel   = 0;
+        if (e.key == "h" || e.key == "g") cam.up_vel        = 0;
+        if (e.key == "s" || e.key == "f") cam.side_vel      = 0; 
+    }
+   
+    return cam;
+}
+
+/* - - - Cube Vertices Generator - - - */
+
+function CubeVertices( center=[0,0,0], size=[1,1,1]) {
+
+    /*
+        
+    Cube Vertices
+
+                      H - - - G 
+                     /|      /|
+                    / |     / |     
+    y = size[1]    D - - - C  |       
+    |              |  E - -|- F    z = -size[2] 
+    |              | /     | /    /    
+    |              |/      |/    /     
+    y =-size[1]    A - - - B    z = size[2]
+                  /-------/
+          x = -size[0],size[0]
+       
+    */
+
+    let A = [-1,-1, 1];
+    let B = [ 1,-1, 1];
+    let C = [ 1, 1, 1];
+    let D = [-1, 1, 1];
+
+    let E = [-1,-1,-1];
+    let F = [ 1,-1,-1];
+    let G = [ 1, 1,-1];
+    let H = [-1, 1,-1];
+
+    for (X of [A,B,C,D,E,F,G,H]) {
+
+        X[0] *= size[0]; 
+        X[1] *= size[1];
+        X[2] *= size[2];
+
+        X[0] += center[0];
+        X[1] += center[1];
+        X[2] += center[2];
+    }
+
+    let Front  = [ ...A,...B,...C,  ...C,...D,...A ];
+    let Back   = [ ...E,...F,...G,  ...G,...H,...E ];
+    let Left   = [ ...A,...E,...H,  ...H,...D,...A ];
+    let Right  = [ ...B,...F,...G,  ...G,...C,...B ];
+    let Bottom = [ ...A,...B,...F,  ...F,...E,...A ];
+    let Top    = [ ...D,...C,...G,  ...G,...H,...D ];
+
+    return new Float32Array([
+        ...Front, ...Back, ...Left, ...Right, ...Bottom, ...Top
+    ]);
+}
+
+function Add(A,B) {
+
+    let AB = [];    
+    for (let i in A) AB.push(A[i]+B[i]);    
+
+    return AB; 
+}
+
+function Cross(A,B) { return [
+
+    A[1] * B[2] - A[2] * B[1], 
+    A[2] * B[0] - A[0] * B[2],
+    A[0] * B[1] - A[1] * B[0]
+]};
+
+function Dot(A,B) {
+
+    let sum = 0;
+    for (let i in A) sum += A[i]*B[i]; 
+
+    return sum;
+}
+
+function Scale(A, b) {
+
+    let A_new = [];
+    for (let i in A) A_new.push(A[i]*b);
+
+    return A_new;
+}
+
+function Normalize(vec) {
+
+    let L2   = 0;
+    let unit = [0,0,0];
+
+    for (let i in vec) L2 += vec[i]*vec[i];
+    for (let i in vec) unit[i] = vec[i]/Math.sqrt(L2);
+
+    return unit; 
+}
+
+function Rand() {
+    return Math.random()
+}
+
+</script>

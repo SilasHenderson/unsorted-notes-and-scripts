@@ -1,0 +1,48 @@
+<link href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.62.2/codemirror.min.css" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.62.2/codemirror.min.js"></script>
+<script src="https://unpkg.com/split-grid/dist/split-grid.js"></script>
+
+<style>
+    .grid{
+        font-size:20px;
+        width:50%;
+        height:100%;
+        margin:0px;
+        padding:0px;
+        display:grid;
+        grid-template-columns:100%;
+        grid-template-rows: 49% 2% 49%;
+    }
+    #track{
+        background-color:green;
+    }
+    .CodeMirror {
+        border: none;
+        height: 100%;
+        background-color:#fafafa; 
+    }
+</style>
+
+<div class="grid">
+    <div><div id='wat_div'></div></div>
+    <div id='track'></div>
+    <div><div id='js_div'></div></div>
+</div>
+
+<script>
+
+let split = Split({
+    rowGutters:[{ track:1, element:track }]
+})
+
+let wat_editor = CodeMirror( wat_div, {
+    lineNumbers:true, 
+    fixedGutter:false
+})
+
+let js_editor = CodeMirror( js_div, {
+    lineNumbers:true, 
+    fixedGutter:false
+})
+
+</script>

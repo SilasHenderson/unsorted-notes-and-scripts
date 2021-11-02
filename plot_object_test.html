@@ -1,0 +1,171 @@
+<p id='p'> </p>
+<canvas id='canvas' width=300 height=300> </canvas>
+
+<style> canvas{
+	border:solid 2px #777777;
+	border-radius:5px;
+} </style>
+
+<script>
+
+let plot = Plot('canvas');
+
+let x_data = new Array(1000).fill(0).map((x,i)=> i/100);
+let y_data = x_data.map(x=>5 + 2*Math.cos(x));
+
+let iter = 0;
+
+(function loop() {
+
+	y_data = x_data.map(x=>5 + 2*Math.cos(iter/20)*Math.cos(x + iter/20));
+	
+	plot.grid();
+	plot.title(iter)
+	plot.line(x_data, y_data, 'blue', 3);
+
+	if (iter++ < 100) requestAnimationFrame(loop);
+})()
+
+
+function Plot(canvas_id) {
+
+	/* Plot Object */
+
+	let plot = {
+
+		canvas: document.getElementById(canvas_id), 
+		ctx:    plot.canvas.getContext('2d'),
+		xlim:  [0,10],
+		ylim:  [0,10],
+	    pos:   [.1,.1,.8,.7],
+	    title: 'plotty mcplotface',
+	    colors:{
+	    	canvas: '#f9f9f9',
+			axes:   '#f2f2f2',
+			tick:   '#000000',
+			label:  '#000077',
+			grid:   '#777777'
+		},
+
+		mouse:{
+			pos: [0,0],
+			down: false
+		}, 
+
+		line: (x,y, color='blue', width=2) => {
+
+			plot.ctx.strokeStyle = color; 
+			plot.ctx.lineWidth   = width;
+			plot.ctx.beginPath();
+			plot.ctx.moveTo( ...get_canvas_pos(x[0],y[0]) );
+
+			for (let i in x) {
+				plot.ctx.lineTo( ...get_canvas_pos(x[i],y[i])); 
+			}
+			plot.ctx.stroke();
+		}, 
+		
+		text: (x,y,text, color='black', font_size=12) => {
+
+			plot.ctx.font = '12px sans-serif';
+			plot.ctx.fillStyle = '#000000';
+			plot.ctx.fillText( text, ...get_canvas_pos(x,y));
+		}, 
+
+		grid: (density = 10) => { draw_grid(); }
+	}
+
+	/* Mouse Functions */
+
+	plot.canvas.onmousemove = (e) => {
+		p.innerHTML = get_axes_pos(e.offsetX, e.offsetY);
+	}
+
+	/* Internal Functions */
+
+	function draw_grid(){
+		
+		plot.ctx.fillStyle = plot.colors.canvas;
+		plot.ctx.fillRect(0,0,plot.canvas.width,plot.canvas.height);
+
+		plot.ctx.font         = '30px sans-serif';
+		plot.ctx.fontWeight   = 'bold';
+		plot.ctx.fillStyle    = plot.colors.title;
+		plot.ctx.textBaseline = 'top';
+		plot.ctx.textAlign    = 'center';
+		plot.ctx.fillText(plot.title, canvas.width/2,15); 
+
+		// Axes Background Color
+
+		let [cx0, cy0] = get_canvas_pos(plot.xlim[0], plot.ylim[0]);
+		let [cx1, cy1] = get_canvas_pos(plot.xlim[1], plot.ylim[1]);
+		
+		plot.ctx.fillStyle = plot.axes_color;
+		plot.ctx.fillRect(cx0, cy0, cx1-cx0, cy1-cy0);
+		
+		// Axes Grid	
+		
+		let [x0,x1] = plot.xlim;
+		let [y0,y1] = plot.ylim;
+
+		let dx = (x1-x0)/density;
+		let dy = (y1-y0)/density;
+		
+		let ticklen = .01*Math.min(y1-y0, x1-x0);
+
+		plot.ctx.textAlign    = 'center';
+		plot.ctx.textBaseline = 'top';		
+
+		for (let x = x0; x <= x1; x += dx) {
+			plot.line([x,x], [y0, y1],         plot.colors.grid, .5);
+			plot.line([x,x], [y0, y0+ticklen], plot.colors.tick, 1);
+			plot.line([x,x], [y1, y1-ticklen], plot.colors.tick, 1);
+			plot.text(x,y0-(y1-y0)/50, x, plot.plot.colors.label);
+		}
+
+		plot.ctx.textBaseline = 'middle';
+		plot.ctx.textAlign    = 'end';
+
+		for (let y = y0; y <= y1; y += dy) {
+			plot.line([x0, x1],           [y,y], plot.colors.grid,.5);
+			plot.line([x0, x0 + ticklen], [y,y], plot.colors.tick, 1);
+			plot.line([x1, x1 - ticklen], [y,y], plot.colors.tick, 1);
+			plot.text(x0-(x1-x0)/50, y, y, plot.colors.label)
+		}
+		plot.line([x0,x1,x1,x0,x0],[y0,y0,y1,y1,y0], plot.colors.box, 2)
+	}
+	function get_canvas_pos(axes_x,axes_y){	
+		
+		let [x0,x1] = plot.xlim;
+		let [y0,y1] = plot.ylim;
+
+		let x_norm = (axes_x - x0)/(x1 - x0)*plot.pos[2];
+		let y_norm = (axes_y - y0)/(y1 - y0)*plot.pos[3];
+
+		return [
+			plot.canvas.width*(   plot.pos[0] + x_norm), 
+			plot.canvas.height*(1-plot.pos[1] - y_norm)
+		]
+	}
+	function get_axes_pos(canvas_x, canvas_y){
+
+		// normalized canvas coords
+		let cx = canvas_x/plot.canvas.width;
+		let cy = 1 - canvas_y/plot.canvas.height; 
+
+		// normalized axes coords
+		let nx = (cx - plot.pos[0])/plot.pos[2];
+		let ny = (cy - plot.pos[1])/plot.pos[3];
+	
+		// axes coords
+		let ax = plot.xlim[0] + nx*(plot.xlim[1]-plot.xlim[0]);
+		let ay = plot.ylim[0] + ny*(plot.ylim[1]-plot.ylim[0]);
+
+		return [ax,ay]
+	}
+
+	plot.grid();
+	plot.title('title');
+	return plot;
+}
+</script>

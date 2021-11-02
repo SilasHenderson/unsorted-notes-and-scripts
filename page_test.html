@@ -1,0 +1,505 @@
+<!doctype html>
+<meta charset='utf-8'>
+
+<link href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.62.2/codemirror.min.css" rel="stylesheet">
+<link href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.62.2/theme/idea.min.css" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.62.2/codemirror.min.js"></script>
+<script src= "https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.62.2/addon/mode/simple.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.62.2/mode/wast/wast.min.js"></script>
+<script src= "http://www.visual-math.com/scripts/lib/libwabt.js"></script>
+
+<style>
+.CodeMirror {
+  	border: none;
+  	height: 100%;
+  	background-color:#fafafa; 
+ }
+</style>
+
+<body>
+<script>
+
+let page     = GeneratePageObject();
+let examples = GenerateExamplesArray();
+
+let print_cue = '';
+
+let imports = {js:{
+   
+    print: (a) => print_cue += 'out: ' + a + '<br>',
+    hello: () => print_cue += 'out: ' + 'hello world'
+}}
+
+
+page.Run = () => {
+
+	let wat       = page.editor.getValue();
+	let wasm_info = CompileRunPrintWat(wat, imports);
+
+	if (print_cue == '') print_cue = "no 'print' calls <br><br>"
+
+	page.Print( 
+		'<b>Result</b><br>' + 
+		print_cue + 
+		'<br><b>Wasm Bytes</b>' + 
+		wasm_info
+	);
+	print_cue = '';
+}
+
+for (let {name,wat} of examples) {
+    page.Button( name, () => {
+        page.editor.setValue(wat);
+		page.Run();
+    });
+}
+
+page.editor.setValue(examples[0].wat);
+page.Run();
+
+/* ----------------------------------------------------- */
+
+function GeneratePageObject() {
+
+	let page = {};
+
+	for (let p of ['left', 'middle', 'right']) {
+
+		page[p] = document.createElement('div');
+		page[p].style.position   = 'fixed';
+		page[p].style.top        = '0px'; 
+		page[p].style.borderLeft = 'solid 1px';
+		page[p].style.padding    = '0px';
+		page[p].style['overflow']        = 'scroll';
+
+		document.body.appendChild(page[p]);
+	}
+
+	page.left.style['backgroundColor']  = '#dddde5';
+	page.left.style['font-size']        = '12px';
+	page.left.style['overflow']         = 'hidden';
+
+	page.right.style['font-size']       = '16px';
+	page.right.style['font-family']     = 'sans-serif';
+	page.right.style['white-space']     = 'pre';
+	page.right.style['backgroundColor'] = '#e0e9e1';
+
+	page.editor = CodeMirror( page.middle, {
+    	mode:'wast', 
+    	theme:'idea',
+    	lineNumbers:true, 
+    	fixedGutter:false
+    })
+
+	page.Print = (str) => page.right.innerHTML = str;
+	
+	page.Resize = () => {
+
+		let w_page  = window.innerWidth;
+		let w_left  = 170;
+		let w_mid   = (w_page - w_left)*.55;
+		let w_right =  w_page - w_left - w_mid;	
+
+		page.left.style.left    = 0      + 'px';
+		page.left.style.width   = w_left + 'px'
+		page.middle.style.left  = w_left + 'px';
+		page.middle.style.width = w_mid  + 'px';
+		page.right.style.left   = w_left + w_mid + 'px';
+		page.right.style.width  = w_right +'px';
+
+		for (let p of ['left', 'middle', 'right']) {
+			page[p].style.height   = window.innerHeight + 'px';
+		}
+	}
+
+	page.Button = (title, fn) => {
+	  
+	  	let btn = document.createElement('button');
+	
+	    btn.innerText             = title;
+	  	btn.style.position        = 'relative';
+	  	btn.style.display         = 'block';
+	  	btn.style.width           = '100%';
+	  	btn.style.outline         = 'none';
+	  	btn.style.border          = 'none';
+	  	btn.style.padding         = '5px';
+	  	btn.style.textAlign       = 'right';
+	  	btn.style.color           = page.left.style.color;
+	  	btn.style.backgroundColor = page.left.style.backgroundColor;
+	  	btn.style.fontSize        = '16px';
+
+	  	btn.onmouseover  = () => btn.style.backgroundColor = '#aaaaaa';
+	  	btn.onmouseleave = () => btn.style.backgroundColor = page.left.style.backgroundColor;
+	  	btn.onmousedown  = () => btn.style.backgroundColor = '#999999';
+	  	btn.onmouseup    = () => btn.style.backgroundColor = '#aaaaaa';
+	  	btn.onclick = () => { fn() }
+	
+	  	page.left.appendChild(btn);
+	}
+
+	page.shift_down = 0;
+	page.Run = null;
+
+	document.onkeydown = (e) => { 
+
+	  	if (e.key == 'Shift') page.shift_down = 1;
+	  	if (e.key == 'Enter' && page.shift_down == 1) {
+		
+		   	e.preventDefault();
+
+		   	if (page.Run == null) page.Print('no Run Fn');
+		   	else page.Run();
+    	}
+    }
+    document.onkeyup = () => page.shift_down = 0;
+
+	window.addEventListener('resize', () => page.Resize());
+	
+	window.onerror = (msg, url, line) => { 
+		page.Print( 
+		`<span style='color:#770000'>${msg}</span><br>
+		<span style='color:#005500'> Line: ${line}<br>
+		`);
+	}
+	page.Resize();
+
+	return page;
+}
+
+/* -------------------------------------------- */
+
+function CompileRunPrintWat(wat, imports) {
+
+	let module_obj    = WabtModule().parseWat(' ', wat);
+    let binary_obj    = module_obj.toBinary({log:true});
+    let wasm_module   = new WebAssembly.Module(binary_obj.buffer, {});
+    let wasm_instance = new WebAssembly.Instance(wasm_module, imports);
+       
+    let binary_bytes    = binary_obj.buffer;
+    let binary_printout = binary_obj.log;
+
+   	let replacements = [
+       	[/.......:/g, ''],
+        [/..\s*; FIXUP.*\n/g,       ''], 
+        [/..\s*; FIXUP.*\n/g,       ''], 
+        [/\n; memory 0/,            ''], 
+        [/\n; import header ./,     ''],
+	    [/(.*); WASM(.*)\n/g,       ''],
+        [/; type.*\n/g,             ''],
+	    [/; function body.*\n/g,    ''],
+        ['; section "Type" (1)',    '<br><b> Types </b>'],
+        ['; section "Function" (3)','<br><b> Functions </b>'],
+        ['; section "Export" (7)',  '<br><b> Exports </b>'],
+	    ['; section "Code" (10)',   '<br><b> Code </b>'], 
+        ['; section "Start" (8)',   '<br><b> Start </b>'],
+        ['; section "Import" (2)',  '<br><b> Import </b>'],
+        ['; section "Memory" (5)',  '<br><b> Memory </b>'], 
+        ['; section "Data" (11)',   '<br><b> Data </b>'], 
+        ['; section "Global" (6)',  '<br><b> Global </b>'], 
+        [/section/g,                'sec']
+    ];
+    for (let i of replacements) {
+        binary_printout = binary_printout.replace(i[0], i[1]);
+    }  
+    return binary_printout;
+}
+  
+/* ---------------------- Examples --------------------- */
+function GenerateExamplesArray() {
+return [
+
+{ 
+name: "~ Wat Notes ~", 
+wat:
+`;; ~ Wat Notes ~ 
+;;
+;;  Write Wat Here 
+;;  Press Shift/Enter 
+
+(module)`
+},{ 
+name: "Module",
+wat:
+`;; ~ Module ~ 
+
+(module)`
+},{ 
+name: "Types",
+wat:
+`;; ~ Types ~ 
+
+;; Type section defines function signature types
+
+(module
+   (type(func))
+)`
+},{
+name: 'Import', 
+wat: 
+`;; Imports require a '2-level' namespace
+
+;; we define a js function that prints 'hello, world', 
+;; import it to the module, then call it with: 
+;; start -> main -> print
+
+(module 
+
+ 	(import "js" "print" (func $print))
+	
+	(func $main
+		call $print)
+	
+	(start $main)
+)`
+},{ 
+name: "Signatures",
+wat:
+`;; ~ Signatures ~ 
+
+;; We define 2 function signature types
+
+(module                      
+   (type(func (param i32)))
+)`
+},{ 
+name: "Functions",
+wat:
+`;; ~ Functions ~ 
+
+;;  Functions definitions span 3 sections
+;;  - We make module with 'empty' function
+
+(module
+   
+   (func)
+
+)
+
+;;  // Sections
+;;
+;;  Types =  
+;;     { param: [], result: [] }
+
+;;  Functions = 
+;;      { sig_index: 0 }, 
+;;  
+;;  Code = 
+;;      { locals: [], body: [] } 
+;;   
+`},{
+name: 'Start',
+wat:
+`;; ~ Start ~
+
+;; We make empty function and call it on start 
+
+(module
+
+	(func $main)
+
+	(start $main)
+)
+
+;; sections = {
+;;
+;;    Type:  [{param:[],result:[]}],
+;;    Func:  [{type:0 }], 
+;;    Code:  [{locals:[],body:[]}],
+;;    Start: 0               
+;; }`
+},{ 
+name: 'Signatures', 
+wat:
+`;; ~ Signatures ~ 
+
+;; 
+
+(module
+   
+   (func (param i32)) ;; func[0] has type[0]
+   (func (param i32)) ;; func[1] has type[0]
+   (func)             ;; func[2] has type[1]
+)
+
+;; 
+;; Indices defined by their position in the byte-code
+;; 
+;; module = {
+;;
+;;    Type: [
+;;       { param:[],    result:[] } // type[0] = i32 in, 0 out  type sig index 0
+;;       { param:[i32], result:[] } // type sig index 1
+;;    ], 
+;;    Func: [
+;;       { type:0 }  // func[0] = function with type 0
+;;       { type:0 }  // func[1] = function with type 0
+;;       { type:1 }  // func[2] = function with type 1
+;;    ], 
+;;    Code: [
+;;       { locals:'',body:'' }
+;;    ]
+;; }`
+},{ 
+name: 'Parameters', 
+wat:
+`;; Parameters: input for a function
+;; Result:      output for a function
+;; Locals:      variable used inside a function
+
+;; We import a general print function, 
+;; then load '42' on the stack and call print
+
+(module 
+
+ 	(import "js" "print" 
+    	(func $print (param i32)))
+	
+	(func $main	
+    	i32.const 42
+		call $print)
+
+	(start $main)
+)`
+},{ 
+name:'Comparisons', 
+wat:
+`;; WASM has comparison operators that 
+;; pop 2 values from stack, then
+;; push a for 0 (false) or for 1 (true)
+
+;; we run less-than, greater-than, and equals operators
+;; on 32 bit integers and print the results
+
+(module 
+
+ 	(import "js" "print" 
+    	(func $print (param i32)))
+	
+	(func $main	
+        
+        ;; (1 < 2) = true
+ 		i32.const 1 			;; load 1 and 2 to stack
+        i32.const 2
+        i32.lt_s 				;; run 'less-than' op
+      	call $print 			;; print result (0 or 1)
+  
+  		;; (1 > 2) = false
+        i32.const 1             
+        i32.const 2
+        i32.gt_s              
+        call $print
+  
+      	;; (1 == 1) = true
+  		i32.const 1
+        i32.const 1
+        i32.eq
+        call $print)
+  
+	(start $main)
+)`
+},{  
+name:"Loops",
+wat:
+`;; Wasm loops are defined with: loop [operations] end
+
+;; we write a 'print loop'
+;; for i = 0:5, print i
+
+(module 
+  
+ 	(import "js" "print" (func $print (param i32)))
+	
+	(func $main	(local $i i32)  ;; i is counter
+      	
+      	loop
+      		local.get $i 		;; print i
+      		call $print
+      		
+      		local.get $i 		;; i = i + 1
+            i32.const 1
+            i32.add
+      		local.tee $i
+      		i32.const 5   		;; break if i > 5
+            i32.le_s
+       		br_if 0
+      	end )
+  
+	(start $main)
+)`
+},{
+name: 'Memory', 
+wat:
+`;; we load some numbers to memory, then 
+;; and read values back an print
+
+(module 
+  
+ 	(import "js" "print" (func $print (param i32)))
+	(import "js" "memory" (memory 0))
+	
+    (func $main (local $i i32)
+      	loop
+			local.get $i 			;; print i32(mem[i])
+      		i32.load 				
+      		call $print
+      
+      		local.get $i            ;; i += 4
+        	i32.const 4
+			i32.add
+			local.tee $i
+			i32.const 40
+			i32.le_s
+			br_if 0  				;; break if i < 40
+		end)
+	
+    (start $main)
+)`
+},{  
+name: 'Data', 
+wat:
+`;; Initial memory data can be set in data section
+
+;; we define an export a wasm memory
+;; with mem[0,1,2,3] = 1  // an i32
+
+ (module 
+
+ 	(import "js" "print" 
+ 		(func $print (param i32)))
+
+	(func $main
+     	i32.const 0
+		i32.load
+		call $print)
+
+	(memory $m 1)
+	(data (i32.const 0) "\\01")
+	
+	(export "mem" (memory $m))
+	(start $main)
+)`
+},{	
+name: 'Globals', 
+wat: 
+`;; Globals
+
+(module 
+  
+	(import "js" "print" (func $print (param i32)))
+  
+  	(func $main (export "main")
+      
+      	global.get $x 			;; print x
+      	call $print
+      
+      	global.get $x 			;; x += 1
+      	i32.const 1
+        i32.add
+        global.set $x)
+ 	
+  	(global $x (export "x")  	;; global x = 1
+      	(mut i32) (i32.const 1))
+)`
+}]}
+</script>
+</body>

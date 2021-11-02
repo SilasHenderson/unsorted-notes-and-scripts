@@ -1,0 +1,33 @@
+<pre id='p'></pre>
+
+<script>
+
+let code = 
+`
+00 61 73 6d  	      ;; MAGIC  
+01 00 00 00           ;; VERSION
+	
+01 08 02              ;; TYPES size num 
+60 01 7f 00           ;; - kind=func, sig=1 i32 in, 0 out  
+60 00 00              ;; - kind=func, sig=0 in, 0 out  
+`;
+
+// Remove Comments
+code = code.replace(/;;.*\n/g, '');
+
+// Split to Array
+code = code.trim().split(/[\s+\n+]+/g);
+
+// Convert Entries to Numbers
+code = code.map(x => Number('0x'+x));
+
+// Convert Numbers to Uint8's
+code = Uint8Array.from(code);
+
+WebAssembly.instantiate(code,{}).then( obj => {
+
+	console.log(obj);
+})
+
+
+</script>

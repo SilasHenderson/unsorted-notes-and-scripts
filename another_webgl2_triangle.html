@@ -1,0 +1,72 @@
+<canvas id='canvas' width=300 height=300> </canvas>
+<style> canvas{border: solid 2px;} </style>
+
+<script>
+
+let gl = canvas.getContext('webgl2');
+
+let vertex_code = 
+
+`#version 300 es
+
+in vec2 pos;
+in vec3 color;
+out vec4 COLOR;
+uniform float t;
+
+void main() 
+{
+    COLOR = vec4(color, 1.0);
+    gl_Position = vec4(pos, 0.0, 1.0);
+}`;
+
+let fragment_code =
+
+`#version 300 es
+precision highp float;
+
+in vec4 COLOR;
+out vec4 frag_color;
+
+void main() 
+{ 
+    frag_color = COLOR;
+}`;
+
+let program         = gl.createProgram();  
+let vertex_shader   = gl.createShader(gl.VERTEX_SHADER);    
+let fragment_shader = gl.createShader(gl.FRAGMENT_SHADER);
+
+gl.shaderSource( vertex_shader,   vertex_code);
+gl.shaderSource( fragment_shader, fragment_code);
+gl.compileShader(vertex_shader);     
+gl.compileShader(fragment_shader);  
+
+gl.attachShader( program, vertex_shader);
+gl.attachShader( program, fragment_shader);
+gl.linkProgram(  program); 
+gl.useProgram(   program);  
+
+let pos_attrib   = gl.getAttribLocation(program,  'pos');
+let color_attrib = gl.getAttribLocation(program,  'color');
+
+gl.enableVertexAttribArray(color_attrib);
+gl.enableVertexAttribArray(pos_attrib)
+
+let pos_buffer   = gl.createBuffer();
+let color_buffer = gl.createBuffer();
+
+let pos_data   = new Float32Array([-1,-1, 1,-1, 1,1]);
+let color_data = new Float32Array([ 0,0,1,  0,1,0,  1,0,0]);
+
+gl.bindBuffer(gl.ARRAY_BUFFER, pos_buffer);
+gl.bufferData(gl.ARRAY_BUFFER, pos_data, gl.STATIC_DRAW);
+gl.vertexAttribPointer(pos_attrib, 2, gl.FLOAT, false, 4*2, 0);
+
+gl.bindBuffer(gl.ARRAY_BUFFER, color_buffer);
+gl.bufferData(gl.ARRAY_BUFFER, color_data, gl.STATIC_DRAW);
+gl.vertexAttribPointer(color_attrib, 3, gl.FLOAT, false, 4*3, 0);
+
+gl.drawArrays(gl.TRIANGLES, 0, 3);
+
+</script>

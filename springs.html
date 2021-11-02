@@ -1,0 +1,32 @@
+<canvas id='canvas' width=300 height=300> </canvas>
+<script>
+
+
+let p = new Point(1,2);
+
+console.log(p);
+
+function Point(x,y) {
+
+    this.position = [x,y];
+    this.velocity = [0,0];
+    this.force    = [0,0];
+    this.mass     = 1;
+    this.fixed    = false;
+    this.index    = Point.Count;
+}
+Point.prototype.Count = 0;
+
+function Spring(pt1, pt2) {
+
+    let dx = pt2.position[0] - pt1.position[0];
+    let dy = pt2.position[1] - pt1.position[1];
+  
+    this.length = Math.sqrt(dx*dx + dy*dx);
+    this.width  = 1;
+    this.points = [pt1.index, pt2.index]
+}
+
+
+
+</script>

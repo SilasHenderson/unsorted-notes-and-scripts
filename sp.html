@@ -1,0 +1,84 @@
+<script>
+
+/* ----------- Data ------------ */
+
+num_rows = i32;
+row_size = [ i32, i32, ...]       // matrix num columns per row
+col      = [ i32, i32, i32, ...]  // matrix column entries
+val      = [ f32, f32, f32, ...]  // matrix value entries
+x        = [ f32, f32, f32, ...]  // vector in
+b        = [ f32, f32, f32, ...]  // vector out
+
+/* ---------- Program ------------ */
+
+row_size_idx = row_size_offset
+col_idx      = col_offset
+val_idx      = val_offset
+b_idx        = b_offset
+
+num_rows     = load num_rows_offset
+row          = 0
+
+// For each row
+while row < num_rows
+
+	// Get row size, Set b[row] = 0
+	row_size = load row_size_idx
+	b = 0
+
+	// For each entry in row
+	for 0:row_size
+
+		// Get column and value, update indices
+		col = load col_idx
+		val = load val_idx
+		col_idx += 4
+		val_idx += 4
+
+		// Get x value
+		x_idx = x_offset + 4*col
+		x     = load x_idx
+
+		// Update b[row] += A[row,col]*x[col]
+		load b_idx
+		load val*x
+		store b_idx
+
+	// Update 
+
+	row++;
+	row_size_idx += 4;
+
+	b[b_idx] = b;
+	b_idx += 4;
+
+/*
+
+r = b - A * x;
+p = r;
+rsold = r'*r;
+
+sp vec  vec   
+A  x,b, Ap,p,r, alpha, pAp, 
+
+for i = 1:Iter
+
+    Ap  = A * p              vec = sp*vec
+	pAp = dot(p,Ap)          dot
+
+    alpha = r2/pAp           flop
+
+    x += alpha*p             vec += const*vec      
+    r -= alpha*Ap            vec += const*vecMul
+
+    rsnew = dot(r,r)         dot(vec,vec)
+
+    r_ratio = rsnew/rsold    float op
+
+    p = r + r_ratio * p      vec = vec + const*vec
+
+    rsold = rsnew            float op
+`
+}
+
+</script>
