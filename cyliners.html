@@ -1,0 +1,105 @@
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js" integrity="sha512-dLxUelApnYxpLt6K2iomGngnHO83iUvZytA3YjDUCjT0HDOHKXnVYdf3hU4JjM8uEhxf9nD1/ey98U3t2vZ0qQ==" crossorigin="anonymous"></script>
+
+<p id='info'> </p>
+<canvas id='canvas' width=500 height=500></canvas>
+
+<script>
+
+let renderer = new THREE.WebGLRenderer({canvas: canvas});            
+let scene    = new THREE.Scene();                              
+let camera   = new THREE.PerspectiveCamera(60, canvas.width/canvas.height, 1, 1000); 
+
+renderer.setClearColor(0x171717)
+
+camera.up.set(0, 0, 1);
+camera.position.set( 20,20,20);
+camera.lookAt( 0,0,0); 
+
+let point_light   = new THREE.PointLight();                   
+let ambient_light = new THREE.AmbientLight(0xffffff, .5);
+
+point_light.position.set(5,5,5);
+
+scene.add(point_light, ambient_light);
+
+function Bar( posA=[1,1,1], posB=[0,0,0], color=0x7777ff) {
+
+    this.mesh = new THREE.Mesh( 
+        new THREE.CylinderGeometry(1,1,10), 
+        new THREE.MeshPhongMaterial({color:0x7777ff})
+    )
+    /*     ____
+         /|   /
+        / |  /
+       |\ z /        |\ y /
+       | \|/_____y   |z\|/ 
+       | /           |  /
+       |x            | x
+                     |/
+    */
+
+    this.set = (posA, posB) => {
+
+        let x = (posA[0]+posB[0])/2;
+        let y = (posB[1]+posA[1])/2;
+        let z = (posB[2]+posA[2])/2;
+
+        let dx = posB[0]-posA[0];
+        let dy = posB[1]-posA[1];
+        let dz = posB[2]-posA[2];
+        let dxy = Math.sqrt(dx*dx + dy*dy);
+        let L   = Math.sqrt(dx*dx + dy*dy + dz*dz);
+
+        this.mesh.rotation.x = Math.atan2( dz, dy);
+        this.mesh.rotation.z = Math.atan2( dy, dx);
+        this.mesh.position.set(x,y,z);
+        // this.mesh.scale.z = L;
+    }
+    this.set( posA, posB);
+}
+
+let cyl = new THREE.Mesh( 
+    new THREE.CylinderGeometry(1,1,1), 
+    new THREE.MeshPhongMaterial({color:0x7777ff})
+)
+
+let b = new Bar();
+
+// info.innerHTML += b.mesh;
+scene.add(cyl);
+
+let t = 0;
+
+(function loop(){
+
+    t += .02;
+    let c = Math.cos(t);
+    let s = Math.sin(t);
+
+    // b.set([0,0,0], [c,s,0])
+
+    cyl.rotation.y += .2;
+
+    renderer.render(scene, camera);
+    requestAnimationFrame(loop);
+})()
+
+
+function RandomColor() {
+
+    let colorString = '0123456789abcdef';   
+    let color = '#';
+
+    for (let i = 0; i < 6; i++) {
+        color += colorString[Math.floor( Math.pow(Math.random(),2)*16)];
+    }
+    return color;
+}
+
+window.addEventListener( 'resize', 
+    () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize( window.innerWidth, window.innerHeight );
+});
+</script>

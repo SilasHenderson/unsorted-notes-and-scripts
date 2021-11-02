@@ -1,0 +1,37 @@
+<p id='info'> </p>
+<canvas id='canvas' width=300 height=300 style='border:solid 2px'> </canvas>
+
+<script>
+
+'use strict'
+
+let ctx = canvas.getContext('2d');
+
+let Point = function(){
+
+	Point.count += 1;
+
+	this.x     = canvas.width*Math.random();
+	this.y     = canvas.height*Math.random();
+	this.num   = Point.count++;
+	this.color = [0,0,0].map(()=>Math.random());
+
+	this.draw = () => {
+		ctx.fillStyle = 
+		ctx.fillText(this.num, this.x, this.y);
+	}
+}
+Point.count = 0;
+
+let pt = 0;
+while ( pt++ <= 100) {
+
+	let pt = new Point();
+
+	pt.draw();
+
+	// info.innerHTML += y
+}
+
+
+</script>
