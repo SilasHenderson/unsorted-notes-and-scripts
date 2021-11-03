@@ -1,0 +1,70 @@
+<html> <body> <canvas id='canvas'></canvas> <script> 
+let canvas = document.getElementById('canvas');
+	canvas.width = canvas.height = 500;
+let gl = canvas.getContext('webgl2');   
+
+let vs = gl.createShader(gl.VERTEX_SHADER);
+	gl.shaderSource(vs, 
+		`#version 300 es
+  		in vec2 pos;
+		void main(void) {
+			gl_Position  = vec4(pos, 0., 1.);}`);
+   	gl.compileShader(vs);
+
+let fs = gl.createShader(gl.FRAGMENT_SHADER);
+    gl.shaderSource(fs, 
+		`#version 300 es
+		precision highp float;
+  		out vec4 color;
+		void main(void) { 
+			color = vec4(0., 0., 0., 1.);}`);
+	gl.compileShader(fs);
+
+let prog = gl.createProgram();
+    gl.attachShader(prog, vs);
+    gl.attachShader(prog, fs);
+  	gl.linkProgram(prog); 
+	gl.useProgram(prog);
+
+let pos = gl.getAttribLocation(prog, 'pos');
+	gl.enableVertexAttribArray(pos);
+
+let D = new Float32Array(1e6);
+	gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
+	gl.bufferData(gl.ARRAY_BUFFER, D, gl.STATIC_DRAW);
+	gl.vertexAttribPointer(pos, 2, gl.FLOAT, false, 2*4,0); 
+	
+let X = .9, X0 = .9, I = 0;
+let Y =  0, Y0 =  0, t0 = new Date().getTime();
+
+loop();
+
+function loop() {
+	let t = (new Date().getTime() - t0)/1000;
+	if (t < 10) { 
+		requestAnimationFrame(loop);}
+
+	let X0 = X; X = .9*Math.cos(2*t)*Math.cos(t);
+	let Y0 = Y; Y = .9*Math.cos(2*t)*Math.sin(t);
+	let w = .02*Math.cos(2*t)*Math.cos(2*t);
+	
+	line(X0,Y0, X,Y, w);	
+	gl.bufferSubData(gl.ARRAY_BUFFER, 0, D);
+	gl.drawArrays(gl.TRIANGLES, 0, I);}
+
+function line(x0, y0, x1, y1, w=.01) {
+	let dx = x1 - x0;
+	let dy = y1 - y0;
+	let L  = Math.sqrt(dx*dx + dy*dy);
+	let u  = dy*w/L;
+	let v  = dx*w/L;
+
+	D[I] = x0-u; I++; 	D[I] = y0+v; I++;  
+	D[I] = x0+u; I++;	D[I] = y0-v; I++;
+	D[I] = x1-u; I++;   D[I] = y1+v; I++;
+
+	D[I] = x0+u; I++; 	D[I] = y0-v; I++;  
+	D[I] = x1+u; I++;	D[I] = y1-v; I++;
+	D[I] = x1-u; I++;   D[I] = y1+v; I++;}	
+	
+</script> </body> </html>

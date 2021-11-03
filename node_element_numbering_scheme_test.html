@@ -1,0 +1,63 @@
+<h3> Node Element Numbering Scheme for Square Elements </h3>
+
+<pre>
+elements = [ 
+ 	[n0,n1,n2,n3, A],	-- el0	
+	[n0,n1,n2,n3, A], 	-- el1	...		
+	... ]				
+              n0     n1 
+nodes_pos  = [x,y], [x,y], ... ] 
+nodes_disp = [u,v], [u,v], ... ] 
+nodes_f    = [s,t], [s,t], ... ]
+
+</pre>
+
+<canvas id='canvas' width=400 height=400> </canvas>
+<script>
+
+let ctx = canvas.getContext('2d');
+	ctx.textAlign = "center";
+
+let elx = ely = 10;
+let nodes = [];
+
+for (let y = ely; y > -1; y--) {	
+	for (let x = 0; x < elx + 1; x++) {
+		nodes.push([x,y]); } }	
+
+let	elements = [];
+
+for (let yi = 0; yi < ely; yi++) {	
+	for (let x = 0; x < elx; x++) {
+		
+		let low_left  = (yi+1)*(elx+1) + x;
+		let low_right = (yi+1)*(elx+1) + x + 1;
+		let up_right  = (yi  )*(elx+1) + x + 1;
+		let up_left   = (yi  )*(elx+1) + x;
+		
+		elements.push( [low_left, low_right, up_right, up_left, 1]); }}
+
+label_nodes();
+label_elements();
+
+function label_nodes(separation=35) {
+	ctx.fillStyle = '#227722';
+	for (let n in nodes) {
+		let x = nodes[n][0];
+		let y = nodes[n][1];
+		ctx.fillText(n, separation*x, canvas.height-separation*y); } }
+
+function label_elements(separation=35) {
+	ctx.fillStyle = '#772222';
+
+	for (let el in elements) {
+
+		let n0 = elements[el][0];
+		let n2 = elements[el][2];
+
+		let x = (nodes[n0][0] + nodes[n2][0])/2;
+		let y = (nodes[n0][1] + nodes[n2][1])/2;
+
+		ctx.fillText(el.toString(), separation*x, canvas.height-separation*y); } }
+
+</script>

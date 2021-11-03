@@ -1,0 +1,76 @@
+<!-- - - - - - - - - - -  Document (html) - - - - - - - -->
+<html> <body> 
+	<h4> y = f(x+t) with glsl </h4>
+	<p id='p'>  press (shift+enter) to run </p> 
+	
+	<p> <textarea id='paper' style='width:500;'> 
+		sin(x + 2.*t) </textarea> </p>
+	
+	<canvas id='canvas'> </canvas> <script> 
+
+/*-- - - - - - - - - - - Document (javascript) - - - - - --*/
+let p = document.getElementById('p');
+let paper  = document.getElementById('paper');
+let canvas = document.getElementById('canvas');
+	canvas.width = canvas.height = 500;
+let gl = canvas.getContext('webgl2');   
+
+/*-- - - - - - - - - - - - -  Keyboard - - - - - - - - - --*/
+let _shift = 0;
+document.onkeydown = (e) => {
+	if (e.key == 'Shift'){  _shift = 1;}
+	if (e.key == 'Enter' && _shift == 1) {
+		e.preventDefault();
+		draw(paper.value, 10000);}}
+document.onkeyup = (e) => { _shift = 0;}
+
+/*-- - - - - - - - - - - - Draw Function - - - - - - - - - - - --*/
+function draw(fn, N) {
+	let vs = gl.createShader(gl.VERTEX_SHADER);
+		gl.shaderSource(vs, 
+			`#version 300 es
+  			in float x;
+  			out float y;
+  			uniform float t;			
+			void main(void) {
+				y = ${fn};	
+				gl_PointSize = 2.;
+				gl_Position  = vec4(x, y, 0., 1.);}`);
+   		gl.compileShader(vs);
+
+	let fs = gl.createShader(gl.FRAGMENT_SHADER);
+    	gl.shaderSource(fs, 
+			`#version 300 es
+			precision highp float;
+			out vec4 color;
+			void main(void) {
+				color = vec4(0.,0.,0.,1.);}`);
+		gl.compileShader(fs);
+
+	let prog = gl.createProgram();
+    	gl.attachShader(prog, vs);    gl.attachShader(prog, fs);
+  		gl.linkProgram(prog); 		  gl.useProgram(prog);
+
+	let t_loc = gl.getUniformLocation(prog,'t');
+	let x_loc = gl.getAttribLocation(prog, 'x');
+	let X = new Float32Array(N); 
+		for (i=0; i<N; i++) { X[i] = -1+i*2/(N-1);}
+	
+	gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
+	gl.bufferData(gl.ARRAY_BUFFER, X, gl.STATIC_DRAW);
+	gl.enableVertexAttribArray(x_loc);
+	gl.vertexAttribPointer(x_loc, 1, gl.FLOAT, false, 4,0); 
+	
+	let t0 = new Date().getTime();
+	draw_loop();
+
+	function draw_loop() {
+		let t = (new Date().getTime() - t0)/1000;		
+		gl.uniform1f(t_loc, t);
+		p.innerHTML = 't = ' + t.toFixed(5);
+		
+		gl.drawArrays(gl.POINTS,0,N);
+		if (t < 1) { 
+			requestAnimationFrame(draw_loop);}}}
+
+</script> </body> </html> <!-- &# -->
